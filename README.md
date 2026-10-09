@@ -4,7 +4,24 @@
   <img src="ZycordMiner/ZycordMiner/Assets.xcassets/Logo.imageset/logo.png" width="160" alt=".env Miner Logo" />
   <br />
   <strong>High-performance, transparent RandomX CPU miner for Zycord (ZCD) on macOS.</strong>
+  <br /><br />
+  <a href="https://github.com/lemo1bot/dotenv-miner/raw/main/DotEnv-1.0.0.dmg">
+    <img src="https://img.shields.io/badge/Download-DotEnv--1.0.0.dmg-00FF66?style=for-the-badge&logo=apple&logoColor=black" alt="Download DotEnv DMG" />
+  </a>
 </p>
+
+---
+
+## ⚡ Direct Download
+
+👉 **[Click Here to Download DotEnv-1.0.0.dmg (Direct Download)](https://github.com/lemo1bot/dotenv-miner/raw/main/DotEnv-1.0.0.dmg)**
+
+File details:
+- **Filename**: `DotEnv-1.0.0.dmg`
+- **Location**: Available directly in the repo root (`./DotEnv-1.0.0.dmg`) and in `dist/DotEnv-1.0.0.dmg`
+- **Size**: ~1.4 MB
+- **Architecture**: macOS Apple Silicon (ARM64)
+- **SHA256**: `eae1dd605fbb17d68ddd40c1841360dd8b5202ee84a2a713b0cabf413182d3c6`
 
 ---
 
@@ -21,20 +38,17 @@
 
 ---
 
-## 💎 Download & Installation
+## 💎 Installation Guide
 
-### Option 1: Download Pre-built DMG
-
-Download `DotEnv-1.0.0.dmg` from the **[Releases](https://github.com/lemo1bot/dotenv-miner/releases)** tab or the `dist/` directory:
-
-1. Double-click `DotEnv-1.0.0.dmg` to open it.
-2. Drag **`.env`** (DotEnv.app) into your **`/Applications`** folder.
-3. **First Launch**: Because the app is built for open-source distribution without an Apple Developer ID signature:
+1. Download **[DotEnv-1.0.0.dmg](https://github.com/lemo1bot/dotenv-miner/raw/main/DotEnv-1.0.0.dmg)**.
+2. Double-click the `.dmg` to open the installer.
+3. Drag **`.env`** into your **`/Applications`** folder.
+4. **First Launch**:
    - Right-click `.env` in `/Applications`
    - Select **Open**
    - Click **Open** in the Gatekeeper confirmation prompt.
-4. Paste your persistent Zycord wallet address (`0x02...`).
-5. Choose **Pool** (AriaPool default) or **Solo**, and click **Start Mining**!
+5. Paste your persistent Zycord wallet address (`0x02...`).
+6. Select **Pool** (AriaPool default) or **Solo**, and click **Start Mining**!
 
 ---
 
