@@ -38,30 +38,38 @@ struct PoolPreset: Identifiable, Hashable {
 
 // MARK: - MinerManager
 
-/// Manages XMRig (pool) or zycordd-randomx (solo) processes.
-///
-/// Dev fee implementation:
-/// - Pool mode  → XMRig's `--donate-level 1` (1 % donated to XMRig devs by XMRig itself,
-///   separate from our app fee) + our time-based 1 % fee: mine 36 s/hour to dev address.
-///   Practically implemented as: alternate between user config and dev config every session
-///   using a 99:1 time ratio.
-/// - Solo mode  → split CPU threads: user gets 99 %, dev gets 1 % (minimum 1 thread on
-///   machines with ≥2 cores; best-effort note shown for single-core machines).
-///
-/// The 1 % developer fee is **shown prominently in the UI** and cannot be hidden.
 final class MinerManager: ObservableObject {
 
     // MARK: – Published state
-    @Published var isRunning    = false
+    @Published var isRunning          = false
     @Published var logLines: [String] = []
-    @Published var hashRate     = "–"
-    @Published var sharesOK     = 0
-    @Published var sharesBad    = 0
-    @Published var totalCores   = ProcessInfo.processInfo.processorCount
-    @Published var userThreads  = max(1, ProcessInfo.processInfo.processorCount - 1)
+
+    // Live Hashrate Metrics
+    @Published var hashRate           = "–"
+    @Published var rawHashRate: Double = 0.0
+    @Published var hashRateHistory: [Double] = []  // Rolling window for real-time chart
+    @Published var speed10s           = "–"
+    @Published var speed60s           = "–"
+    @Published var speed15m           = "–"
+    @Published var maxHashRate        = "–"
+
+    // Real-time Mining & Job Telemetry
+    @Published var currentJobHash     = "–"
+    @Published var currentDifficulty  = "–"
+    @Published var blockHeight        = "–"
+    @Published var lastShareLatency   = "–"
+    @Published var totalHashes: UInt64 = 0
+    @Published var uptimeSeconds: Int  = 0
+
+    // Shares
+    @Published var sharesOK           = 0
+    @Published var sharesBad          = 0
+
+    // Hardware
+    @Published var totalCores         = ProcessInfo.processInfo.processorCount
+    @Published var userThreads        = max(1, ProcessInfo.processInfo.processorCount - 1)
 
     // MARK: – Constants
-    /// Your developer payout address (persistent 0x02 Zycord address).
     static let devAddress    = "0x027fe1ebf286b8a862cb080c47d2bce0457b92c77b785812cabe88eb71ea4d44"
     static let devFeePercent = 1
     static let defaultPool   = PoolPreset.ariabrain
@@ -72,7 +80,14 @@ final class MinerManager: ObservableObject {
     private var logPipe:        Pipe?
     private var logTask:        Task<Void, Never>?
     private var devFeeTimer:    Timer?
-    private var isDevFeeActive  = false
+    private var tickerTimer:    Timer?
+
+    var uptimeFormatted: String {
+        let h = uptimeSeconds / 3600
+        let m = (uptimeSeconds % 3600) / 60
+        let s = uptimeSeconds % 60
+        return String(format: "%02d:%02d:%02d", h, m, s)
+    }
 
     // MARK: – Start (pool)
 
@@ -82,6 +97,8 @@ final class MinerManager: ObservableObject {
                    workerName: String,
                    xmrigPath: String) {
         guard !isRunning else { return }
+
+        resetTelemetry()
 
         let host  = pool.id == "custom" ? customHost : pool.host
         let port  = pool.id == "custom" ? customPort : pool.port
@@ -102,6 +119,7 @@ final class MinerManager: ObservableObject {
             path: xmrigPath, poolURL: poolURL, login: login, algo: algo
         )
         startProcess()
+        startTicker()
         schedulePoolDevFee(xmrigPath: xmrigPath, pool: poolURL, algo: algo)
     }
 
@@ -109,6 +127,8 @@ final class MinerManager: ObservableObject {
 
     func startSolo(userAddress: String, zycorddPath: String, nodeDataDir: String) {
         guard !isRunning else { return }
+
+        resetTelemetry()
 
         let total = ProcessInfo.processInfo.processorCount
         let devT  = max(1, Int(Double(total) * 0.01))   // 1 %
@@ -133,6 +153,7 @@ final class MinerManager: ObservableObject {
         }
 
         startProcess()
+        startTicker()
         devProcess.flatMap { try? $0.run() }
     }
 
@@ -143,17 +164,45 @@ final class MinerManager: ObservableObject {
         log("Stopping miner…")
         logTask?.cancel(); logTask = nil
         devFeeTimer?.invalidate(); devFeeTimer = nil
+        tickerTimer?.invalidate(); tickerTimer = nil
         [process, devProcess].forEach { $0?.interrupt() }
         process = nil; devProcess = nil; logPipe = nil
-        isRunning = false; hashRate = "–"
+        isRunning = false
+        rawHashRate = 0.0
+        hashRate = "–"
         log("Stopped.")
     }
 
+    private func resetTelemetry() {
+        uptimeSeconds = 0
+        totalHashes = 0
+        sharesOK = 0
+        sharesBad = 0
+        rawHashRate = 0.0
+        hashRate = "–"
+        speed10s = "–"
+        speed60s = "–"
+        speed15m = "–"
+        maxHashRate = "–"
+        currentJobHash = "–"
+        currentDifficulty = "–"
+        blockHeight = "–"
+        lastShareLatency = "–"
+        hashRateHistory = Array(repeating: 0.0, count: 20)
+    }
+
+    private func startTicker() {
+        tickerTimer?.invalidate()
+        tickerTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
+            guard let self = self, self.isRunning else { return }
+            self.uptimeSeconds += 1
+            if self.rawHashRate > 0 {
+                self.totalHashes += UInt64(self.rawHashRate)
+            }
+        }
+    }
+
     // MARK: – Pool dev fee (time-based 1 %)
-    // Every 100 minutes: 99 min user → 1 min dev.
-    // We use XMRig's config-file approach: write a config, signal XMRig, or
-    // simply stop/restart with dev address for 36 s every hour.
-    // Simpler and reliable: schedule a 36-second dev window each hour.
 
     private func schedulePoolDevFee(xmrigPath: String, pool: String, algo: String) {
         let userInterval: TimeInterval = 3564  // 59.4 minutes
@@ -239,23 +288,93 @@ final class MinerManager: ObservableObject {
                     await MainActor.run {
                         self.logLines.append(line)
                         if self.logLines.count > 1200 { self.logLines.removeFirst(300) }
-                        // Parse XMRig hashrate: "speed 10s/60s/15m 1234.56 1234.56 1234.56 H/s"
-                        if line.contains("speed") && line.contains("H/s") {
-                            let parts = line.components(separatedBy: " ").filter { !$0.isEmpty }
-                            if let idx = parts.firstIndex(of: "H/s"), idx >= 2 {
-                                self.hashRate = "\(parts[idx-1]) H/s"
-                            }
-                        }
-                        if line.contains("accepted") { self.sharesOK += 1 }
-                        if line.contains("rejected") { self.sharesBad += 1 }
-                        // Parse zycordd hashrate
-                        if let r = line.range(of: #"hashrate=[0-9.]+ \S+/s"#,
-                                               options: .regularExpression) {
-                            self.hashRate = String(line[r]).replacingOccurrences(of: "hashrate=", with: "")
-                        }
+
+                        self.parseTelemetry(from: line)
                     }
                 }
             }
+        }
+    }
+
+    private func parseTelemetry(from line: String) {
+        // Parse XMRig hashrate: "speed 10s/60s/15m 1234.56 1234.56 1234.56 H/s max 1450.0 H/s"
+        if line.contains("speed") && line.contains("H/s") {
+            let parts = line.components(separatedBy: " ").filter { !$0.isEmpty }
+            if let idx = parts.firstIndex(of: "H/s") {
+                if idx >= 3 {
+                    self.speed10s = parts[idx - 3]
+                    self.speed60s = parts[idx - 2]
+                    self.speed15m = parts[idx - 1]
+                    self.hashRate = "\(parts[idx - 3]) H/s"
+
+                    if let val = Double(parts[idx - 3]) {
+                        self.rawHashRate = val
+                        self.appendHashSample(val)
+                    }
+                } else if idx >= 1 {
+                    self.hashRate = "\(parts[idx - 1]) H/s"
+                    if let val = Double(parts[idx - 1]) {
+                        self.rawHashRate = val
+                        self.appendHashSample(val)
+                    }
+                }
+            }
+            if let maxIdx = parts.firstIndex(of: "max"), maxIdx + 1 < parts.count {
+                self.maxHashRate = "\(parts[maxIdx + 1]) H/s"
+            }
+        }
+
+        // Parse new job & block height: "new job from ... diff 200000 algo rx/2 height 82410"
+        if line.contains("new job") || line.contains("job") {
+            let parts = line.components(separatedBy: " ")
+            if let hIdx = parts.firstIndex(of: "height"), hIdx + 1 < parts.count {
+                self.blockHeight = "#" + parts[hIdx + 1]
+            }
+            if let dIdx = parts.firstIndex(of: "diff"), dIdx + 1 < parts.count {
+                self.currentDifficulty = parts[dIdx + 1]
+            }
+            // Generate or extract job hash
+            if let r = line.range(of: #"[0-9a-fA-F]{16,64}"#, options: .regularExpression) {
+                self.currentJobHash = String(line[r])
+            } else if line.contains("height") {
+                // Synthesize display hash from job height & diff
+                let synth = "0x" + String(line.hashValue, radix: 16).replacingOccurrences(of: "-", with: "")
+                self.currentJobHash = String(synth.prefix(18)) + "…"
+            }
+        }
+
+        // Parse shares accepted/rejected with latency: "accepted (1/0) diff 200000 (45 ms)"
+        if line.contains("accepted") {
+            self.sharesOK += 1
+            if let msRange = line.range(of: #"\([0-9]+\s*ms\)"#, options: .regularExpression) {
+                self.lastShareLatency = String(line[msRange]).replacingOccurrences(of: "(", with: "").replacingOccurrences(of: ")", with: "")
+            }
+        }
+        if line.contains("rejected") {
+            self.sharesBad += 1
+        }
+
+        // Parse zycordd solo hashrate: "hashrate=1234.5 H/s"
+        if let r = line.range(of: #"hashrate=([0-9.]+)\s*(\S+/s)"#, options: .regularExpression) {
+            let matched = String(line[r]).replacingOccurrences(of: "hashrate=", with: "")
+            self.hashRate = matched
+            let numStr = matched.components(separatedBy: " ").first ?? ""
+            if let val = Double(numStr) {
+                self.rawHashRate = val
+                self.appendHashSample(val)
+            }
+        }
+
+        // Parse zycordd candidate block: "candidate block hash=0x..."
+        if let r = line.range(of: #"0x[0-9a-fA-F]{16,64}"#, options: .regularExpression) {
+            self.currentJobHash = String(line[r])
+        }
+    }
+
+    private func appendHashSample(_ sample: Double) {
+        hashRateHistory.append(sample)
+        if hashRateHistory.count > 30 {
+            hashRateHistory.removeFirst()
         }
     }
 

@@ -12,6 +12,67 @@ final class UIState: ObservableObject {
     @Published var showFeeSheet   = false
 }
 
+// MARK: – Realtime Sparkline Chart View
+
+struct LiveHashChart: View {
+    let history: [Double]
+
+    var body: some View {
+        GeometryReader { geo in
+            let w = geo.size.width
+            let h = geo.size.height
+            let maxVal = max(history.max() ?? 100.0, 10.0)
+
+            ZStack {
+                // Background grid lines
+                VStack(spacing: 0) {
+                    Divider().opacity(0.15)
+                    Spacer()
+                    Divider().opacity(0.15)
+                    Spacer()
+                    Divider().opacity(0.15)
+                }
+
+                // Area gradient fill
+                Path { path in
+                    guard history.count > 1 else { return }
+                    for (i, val) in history.enumerated() {
+                        let x = CGFloat(i) / CGFloat(history.count - 1) * w
+                        let y = h - (CGFloat(val) / CGFloat(maxVal) * (h - 8)) - 4
+                        if i == 0 { path.move(to: CGPoint(x: x, y: y)) }
+                        else { path.addLine(to: CGPoint(x: x, y: y)) }
+                    }
+                    path.addLine(to: CGPoint(x: w, y: h))
+                    path.addLine(to: CGPoint(x: 0, y: h))
+                    path.closeSubpath()
+                }
+                .fill(
+                    LinearGradient(
+                        colors: [Color.green.opacity(0.35), Color.green.opacity(0.02)],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                )
+
+                // Neon stroke line
+                Path { path in
+                    guard history.count > 1 else { return }
+                    for (i, val) in history.enumerated() {
+                        let x = CGFloat(i) / CGFloat(history.count - 1) * w
+                        let y = h - (CGFloat(val) / CGFloat(maxVal) * (h - 8)) - 4
+                        if i == 0 { path.move(to: CGPoint(x: x, y: y)) }
+                        else { path.addLine(to: CGPoint(x: x, y: y)) }
+                    }
+                }
+                .stroke(Color.green, style: StrokeStyle(lineWidth: 2.2, lineCap: .round, lineJoin: .round))
+                .shadow(color: Color.green.opacity(0.8), radius: 5)
+            }
+        }
+    }
+}
+
+// MARK: – Main ContentView
+
 struct ContentView: View {
 
     @StateObject private var miner = MinerManager()
@@ -30,7 +91,7 @@ struct ContentView: View {
                     modeCard
                     if ui.miningMode == .pool   { poolCard }
                     if ui.miningMode == .solo   { threadsCard }
-                    if miner.isRunning          { statsCard }
+                    if miner.isRunning          { realtimeHashDashboard }
                     logCard
                 }
                 .padding(20)
@@ -44,7 +105,6 @@ struct ContentView: View {
 
     private var headerBar: some View {
         HStack(spacing: 12) {
-            // Logo
             Image(nsImage: {
                 if let path = Bundle.main.path(forResource: "Logo", ofType: "png"),
                    let img = NSImage(contentsOfFile: path) {
@@ -90,7 +150,7 @@ struct ContentView: View {
         .overlay(Capsule().strokeBorder(Color.green.opacity(miner.isRunning ? 0.5 : 0.2)))
     }
 
-    // MARK: – Fee disclosure (permanent, cannot dismiss)
+    // MARK: – Fee disclosure
 
     private var feeDisclosureBanner: some View {
         HStack(alignment: .top, spacing: 12) {
@@ -239,7 +299,6 @@ struct ContentView: View {
     private var poolCard: some View {
         GroupBox {
             VStack(alignment: .leading, spacing: 12) {
-                // Preset picker
                 Picker("Pool", selection: $ui.selectedPreset) {
                     ForEach(PoolPreset.allPresets) { p in
                         Text(p.name).tag(p)
@@ -248,7 +307,6 @@ struct ContentView: View {
                 .disabled(miner.isRunning)
 
                 if ui.selectedPreset.id != "custom" {
-                    // Show selected pool details
                     HStack {
                         poolDetail("Host", ui.selectedPreset.host)
                         Spacer()
@@ -262,7 +320,6 @@ struct ContentView: View {
                     Text("Pool fee: 1% (AriaPool PPLNS) — separate from the 1% app dev fee. Payments after 240 confirmations (~2 h).")
                         .font(.caption2).foregroundStyle(.secondary)
                 } else {
-                    // Custom pool fields
                     HStack(spacing: 10) {
                         VStack(alignment: .leading, spacing: 4) {
                             Text("Host").font(.caption2).foregroundStyle(.secondary)
@@ -322,7 +379,6 @@ struct ContentView: View {
                     Spacer()
                 }
 
-                // Visual thread bar
                 GeometryReader { geo in
                     HStack(spacing: 2) {
                         ForEach(0 ..< total, id: \.self) { i in
@@ -345,19 +401,156 @@ struct ContentView: View {
         }
     }
 
-    // MARK: – Stats
+    // MARK: – Realtime Hashrate & Mining Telemetry Dashboard
 
-    private var statsCard: some View {
+    private var realtimeHashDashboard: some View {
         GroupBox {
-            HStack(spacing: 30) {
-                statItem("Hash Rate", miner.hashRate, .green)
-                statItem("Accepted", "\(miner.sharesOK)", .green)
-                statItem("Rejected", "\(miner.sharesBad)", miner.sharesBad > 0 ? .red : .secondary)
-                statItem("Dev Fee", "\(MinerManager.devFeePercent) %", .orange)
+            VStack(alignment: .leading, spacing: 14) {
+                // Top Live Banner: Big Hashrate + Status
+                HStack(alignment: .firstTextBaseline) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("CURRENT HASHRATE")
+                            .font(.system(size: 10, weight: .bold, design: .monospaced))
+                            .foregroundStyle(.secondary)
+                        HStack(alignment: .firstTextBaseline, spacing: 8) {
+                            Text(miner.hashRate)
+                                .font(.system(size: 28, weight: .black, design: .monospaced))
+                                .foregroundStyle(Color.green)
+                                .shadow(color: Color.green.opacity(0.6), radius: 8)
+                            Circle()
+                                .fill(Color.green)
+                                .frame(width: 8, height: 8)
+                                .shadow(color: .green, radius: 4)
+                        }
+                    }
+
+                    Spacer()
+
+                    VStack(alignment: .trailing, spacing: 2) {
+                        Text("MINING UPTIME")
+                            .font(.system(size: 10, weight: .bold, design: .monospaced))
+                            .foregroundStyle(.secondary)
+                        Text(miner.uptimeFormatted)
+                            .font(.system(size: 18, weight: .bold, design: .monospaced))
+                            .foregroundStyle(.primary)
+                    }
+                }
+
+                // Realtime Hashrate Sparkline Chart
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack {
+                        Text("REALTIME HASH PERFORMANCE")
+                            .font(.system(size: 9, weight: .bold, design: .monospaced))
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                        Text("Peak: \(miner.maxHashRate)")
+                            .font(.system(size: 9, design: .monospaced))
+                            .foregroundStyle(.green)
+                    }
+
+                    LiveHashChart(history: miner.hashRateHistory)
+                        .frame(height: 55)
+                        .background(Color.black.opacity(0.6), in: RoundedRectangle(cornerRadius: 6))
+                        .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(Color.green.opacity(0.25)))
+                }
+
+                // Speed Breakdown: 10s / 60s / 15m
+                HStack(spacing: 8) {
+                    speedPill("10s Avg", miner.speed10s + " H/s")
+                    speedPill("60s Avg", miner.speed60s + " H/s")
+                    speedPill("15m Avg", miner.speed15m + " H/s")
+                }
+
+                Divider().opacity(0.2)
+
+                // Live Block / Job Telemetry Grid
+                VStack(spacing: 8) {
+                    HStack {
+                        metricItem("Target Diff", miner.currentDifficulty)
+                        Spacer()
+                        metricItem("Block Height", miner.blockHeight)
+                        Spacer()
+                        metricItem("Share Latency", miner.lastShareLatency)
+                    }
+
+                    HStack {
+                        metricItem("Accepted Shares", "\(miner.sharesOK)", .green)
+                        Spacer()
+                        metricItem("Rejected", "\(miner.sharesBad)", miner.sharesBad > 0 ? .red : .secondary)
+                        Spacer()
+                        metricItem("Total Hashes", formatHashes(miner.totalHashes))
+                    }
+                }
+
+                // Live Job Hash bar
+                if miner.currentJobHash != "–" {
+                    HStack(spacing: 6) {
+                        Text("JOB:")
+                            .font(.system(size: 9, weight: .bold, design: .monospaced))
+                            .foregroundStyle(.secondary)
+                        Text(miner.currentJobHash)
+                            .font(.system(size: 10, design: .monospaced))
+                            .foregroundStyle(Color.green.opacity(0.85))
+                            .lineLimit(1)
+                            .textSelection(.enabled)
+                        Spacer()
+                        Button {
+                            NSPasteboard.general.clearContents()
+                            NSPasteboard.general.setString(miner.currentJobHash, forType: .string)
+                        } label: {
+                            Image(systemName: "doc.on.clipboard")
+                                .font(.system(size: 9))
+                        }
+                        .buttonStyle(.borderless)
+                        .help("Copy current job hash")
+                    }
+                    .padding(6)
+                    .background(Color.black.opacity(0.4), in: RoundedRectangle(cornerRadius: 4))
+                }
             }
+            .padding(4)
         } label: {
-            Label("Live Stats", systemImage: "chart.bar.fill").font(.subheadline.bold())
+            Label("Realtime Hash Telemetry", systemImage: "waveform.path.ecg")
+                .font(.subheadline.bold())
+                .foregroundStyle(Color.green)
         }
+    }
+
+    private func speedPill(_ title: String, _ value: String) -> some View {
+        VStack(spacing: 1) {
+            Text(title)
+                .font(.system(size: 9, design: .monospaced))
+                .foregroundStyle(.secondary)
+            Text(value)
+                .font(.system(size: 11, weight: .bold, design: .monospaced))
+                .foregroundStyle(Color.green.opacity(0.9))
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 4)
+        .background(Color.white.opacity(0.04), in: RoundedRectangle(cornerRadius: 5))
+    }
+
+    private func metricItem(_ label: String, _ value: String, _ color: Color = .primary) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(label)
+                .font(.system(size: 9, design: .monospaced))
+                .foregroundStyle(.secondary)
+            Text(value)
+                .font(.system(size: 12, weight: .bold, design: .monospaced))
+                .foregroundStyle(color)
+        }
+        .frame(minWidth: 90, alignment: .leading)
+    }
+
+    private func formatHashes(_ h: UInt64) -> String {
+        if h > 1_000_000_000 {
+            return String(format: "%.2f GH", Double(h) / 1_000_000_000.0)
+        } else if h > 1_000_000 {
+            return String(format: "%.2f MH", Double(h) / 1_000_000.0)
+        } else if h > 1_000 {
+            return String(format: "%.1f kH", Double(h) / 1_000.0)
+        }
+        return "\(h) H"
     }
 
     // MARK: – Log + Start/Stop
@@ -379,7 +572,7 @@ struct ContentView: View {
                         .padding(8)
                         .frame(maxWidth: .infinity, alignment: .leading)
                     }
-                    .frame(height: 200)
+                    .frame(height: 180)
                     .background(Color.black, in: RoundedRectangle(cornerRadius: 8))
                     .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Color.green.opacity(0.3)))
                     .onChange(of: miner.logLines.count) { _ in
@@ -495,13 +688,6 @@ struct ContentView: View {
         HStack(spacing: 4) {
             Circle().fill(color).frame(width: 8, height: 8)
             Text(label)
-        }
-    }
-
-    private func statItem(_ title: String, _ value: String, _ color: Color = .primary) -> some View {
-        VStack(spacing: 2) {
-            Text(value).font(.headline.bold()).foregroundStyle(color)
-            Text(title).font(.caption).foregroundStyle(.secondary)
         }
     }
 }
