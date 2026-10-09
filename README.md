@@ -5,20 +5,22 @@
   <br />
   <strong>High-performance, transparent RandomX CPU miner for Zycord (ZCD) on macOS.</strong>
   <br /><br />
-  <a href="https://github.com/lemo1bot/dotenv-miner/raw/main/DotEnv-1.0.0.dmg">
-    <img src="https://img.shields.io/badge/Download-DotEnv--1.0.0.dmg-00FF66?style=for-the-badge&logo=apple&logoColor=black" alt="Download DotEnv DMG" />
+  <a href="https://github.com/lemo1bot/dotenv-miner/releases/latest/download/DotEnv-1.0.0.dmg">
+    <img src="https://img.shields.io/badge/Download_DMG-v1.0.0-00FF66?style=for-the-badge&logo=apple&logoColor=black" alt="Download DotEnv DMG" />
   </a>
 </p>
 
 ---
 
-## ⚡ Direct Download
+## ⚡ Download From Releases
 
-👉 **[Click Here to Download DotEnv-1.0.0.dmg (Direct Download)](https://github.com/lemo1bot/dotenv-miner/raw/main/DotEnv-1.0.0.dmg)**
+👉 **[Download DotEnv-1.0.0.dmg (GitHub Releases)](https://github.com/lemo1bot/dotenv-miner/releases/latest/download/DotEnv-1.0.0.dmg)**
+
+All releases and changelogs are available at: **[github.com/lemo1bot/dotenv-miner/releases](https://github.com/lemo1bot/dotenv-miner/releases)**
 
 File details:
 - **Filename**: `DotEnv-1.0.0.dmg`
-- **Location**: Available directly in the repo root (`./DotEnv-1.0.0.dmg`) and in `dist/DotEnv-1.0.0.dmg`
+- **Release Version**: `v1.0.0`
 - **Size**: ~1.4 MB
 - **Architecture**: macOS Apple Silicon (ARM64)
 - **SHA256**: `eae1dd605fbb17d68ddd40c1841360dd8b5202ee84a2a713b0cabf413182d3c6`

@@ -37,8 +37,8 @@ fi
 
 git remote add origin "$REMOTE_URL"
 echo ""
-echo "→ Pushing 'main' branch (including dist/DotEnv-1.0.0.dmg)…"
-git push -u origin main
+echo "→ Pushing 'main' branch and 'v1.0.0' tag (including DotEnv-1.0.0.dmg)…"
+git push -u origin main --tags
 
 echo ""
 echo "✓ Successfully pushed to https://github.com/$GH_USER/$REPO_NAME"
