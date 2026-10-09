@@ -1,8 +1,12 @@
 import SwiftUI
 
 final class UIState: ObservableObject {
-    @Published var userAddress = ""
-    @Published var workerName  = "mac"
+    @Published var userAddress: String {
+        didSet { UserDefaults.standard.set(userAddress, forKey: "saved_zcd_address") }
+    }
+    @Published var workerName: String {
+        didSet { UserDefaults.standard.set(workerName, forKey: "saved_worker_name") }
+    }
     @Published var addressError = ""
     @Published var miningMode: MiningMode = .pool
     @Published var selectedPreset = PoolPreset.ariabrain
@@ -10,6 +14,11 @@ final class UIState: ObservableObject {
     @Published var customPort     = "3343"
     @Published var customAlgo     = "rx/2"
     @Published var showFeeSheet   = false
+
+    init() {
+        self.userAddress = UserDefaults.standard.string(forKey: "saved_zcd_address") ?? ""
+        self.workerName = UserDefaults.standard.string(forKey: "saved_worker_name") ?? "mac"
+    }
 }
 
 // MARK: – Realtime Sparkline Chart View
@@ -88,17 +97,23 @@ struct ContentView: View {
                     feeDisclosureBanner
                     setupCard
                     walletCard
+                    if ui.miningMode == .pool { earningsCard }
                     modeCard
-                    if ui.miningMode == .pool   { poolCard }
+                    if ui.miningMode == .pool { poolCard }
                     threadsCard
-                    if miner.isRunning          { realtimeHashDashboard }
+                    if miner.isRunning        { realtimeHashDashboard }
                     logCard
                 }
                 .padding(20)
             }
         }
         .background(Color(nsColor: .windowBackgroundColor))
-        .onAppear { setup.checkAndBuild() }
+        .onAppear {
+            setup.checkAndBuild()
+            if !ui.userAddress.isEmpty && ui.addressError.isEmpty {
+                miner.fetchPoolStats(address: ui.userAddress)
+            }
+        }
     }
 
     // MARK: – Header
@@ -243,10 +258,20 @@ struct ContentView: View {
                     TextField("0x027f…  (64 hex chars, starts with 02)", text: $ui.userAddress)
                         .textFieldStyle(.roundedBorder)
                         .font(.system(.body, design: .monospaced))
-                        .onChange(of: ui.userAddress) { v in ui.addressError = validateAddress(v) }
+                        .onChange(of: ui.userAddress) { v in
+                            ui.addressError = validateAddress(v)
+                            if validateAddress(v).isEmpty && !v.isEmpty {
+                                miner.fetchPoolStats(address: v)
+                            }
+                        }
                     Button {
                         if let s = NSPasteboard.general.string(forType: .string) {
-                            ui.userAddress = s.trimmingCharacters(in: .whitespacesAndNewlines)
+                            let trimmed = s.trimmingCharacters(in: .whitespacesAndNewlines)
+                            ui.userAddress = trimmed
+                            ui.addressError = validateAddress(trimmed)
+                            if validateAddress(trimmed).isEmpty && !trimmed.isEmpty {
+                                miner.fetchPoolStats(address: trimmed)
+                            }
                         }
                     } label: { Image(systemName: "doc.on.clipboard") }
                     .help("Paste from clipboard")
@@ -269,6 +294,176 @@ struct ContentView: View {
         } label: {
             Label("Payout Wallet", systemImage: "wallet.pass").font(.subheadline.bold())
         }
+    }
+
+    // MARK: – Earnings & Pool Balances Card
+
+    private var earningsCard: some View {
+        GroupBox {
+            VStack(alignment: .leading, spacing: 14) {
+                // Header with live indicator & refresh button
+                HStack {
+                    HStack(spacing: 6) {
+                        Circle()
+                            .fill(Color.green)
+                            .frame(width: 8, height: 8)
+                            .shadow(color: .green, radius: 4)
+                        Text("AriaPool Live Telemetry")
+                            .font(.system(size: 11, weight: .bold, design: .monospaced))
+                            .foregroundStyle(Color.green)
+                    }
+
+                    Spacer()
+
+                    if !miner.lastPoolUpdate.isEmpty && miner.lastPoolUpdate != "–" {
+                        Text("Updated \(miner.lastPoolUpdate)")
+                            .font(.system(size: 9, design: .monospaced))
+                            .foregroundStyle(.secondary)
+                    }
+
+                    Button {
+                        miner.fetchPoolStats(address: ui.userAddress)
+                    } label: {
+                        HStack(spacing: 4) {
+                            if miner.isRefreshingPool {
+                                ProgressView()
+                                    .scaleEffect(0.6)
+                                    .frame(width: 12, height: 12)
+                            } else {
+                                Image(systemName: "arrow.clockwise")
+                                    .font(.system(size: 10, weight: .semibold))
+                            }
+                            Text("Refresh")
+                                .font(.system(size: 10, weight: .medium))
+                        }
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.mini)
+                    .disabled(miner.isRefreshingPool || ui.userAddress.isEmpty)
+                }
+
+                // Balance summary tiles: 3 columns
+                HStack(spacing: 10) {
+                    balanceTile(
+                        title: "PENDING BALANCE",
+                        amount: miner.poolPendingBalance,
+                        caption: "Ready for next payout",
+                        icon: "creditcard.fill",
+                        tint: .green
+                    )
+
+                    balanceTile(
+                        title: "IMMATURE BALANCE",
+                        amount: miner.poolImmatureBalance,
+                        caption: "Locked (~240 conf)",
+                        icon: "lock.circle.fill",
+                        tint: .orange
+                    )
+
+                    balanceTile(
+                        title: "TOTAL PAID OUT",
+                        amount: miner.poolTotalPaid,
+                        caption: "\(miner.poolPaymentsCount) payout(s) done",
+                        icon: "checkmark.seal.fill",
+                        tint: .cyan
+                    )
+                }
+
+                Divider().opacity(0.2)
+
+                // Payout Progress Bar (Min payout 1.00 ZCD)
+                VStack(alignment: .leading, spacing: 5) {
+                    HStack {
+                        Text("PAYOUT PROGRESS (MIN 1.00 ZCD)")
+                            .font(.system(size: 9, weight: .bold, design: .monospaced))
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                        Text(String(format: "%.1f %%", miner.payoutProgress * 100.0))
+                            .font(.system(size: 10, weight: .bold, design: .monospaced))
+                            .foregroundStyle(Color.green)
+                    }
+
+                    GeometryReader { geo in
+                        ZStack(alignment: .leading) {
+                            RoundedRectangle(cornerRadius: 4)
+                                .fill(Color.white.opacity(0.08))
+                                .frame(height: 8)
+
+                            RoundedRectangle(cornerRadius: 4)
+                                .fill(
+                                    LinearGradient(
+                                        colors: [Color.green.opacity(0.8), Color.green],
+                                        startPoint: .leading,
+                                        endPoint: .trailing
+                                    )
+                                )
+                                .frame(width: max(0, min(geo.size.width * CGFloat(miner.payoutProgress), geo.size.width)), height: 8)
+                                .shadow(color: Color.green.opacity(0.6), radius: 3)
+                        }
+                    }
+                    .frame(height: 8)
+                }
+
+                // Worker & Pool stats row
+                HStack {
+                    metricItem("Pool Workers", "\(miner.poolActiveWorkers) active", miner.poolActiveWorkers > 0 ? .green : .secondary)
+                    Spacer()
+                    metricItem("24h Shares", "\(miner.poolShares24h)", .primary)
+                    Spacer()
+                    metricItem("Pool Hashrate", miner.poolHashRate, .green)
+                    Spacer()
+                    Button {
+                        var clean = ui.userAddress.trimmingCharacters(in: .whitespacesAndNewlines)
+                        if clean.hasPrefix("0x") || clean.hasPrefix("0X") { clean = String(clean.dropFirst(2)) }
+                        let urlStr = clean.isEmpty
+                            ? "https://pool.ariabrain.com/zcd.html"
+                            : "https://pool.ariabrain.com/zcd.html#\(clean)"
+                        if let u = URL(string: urlStr) {
+                            NSWorkspace.shared.open(u)
+                        }
+                    } label: {
+                        HStack(spacing: 3) {
+                            Text("Open Pool Web")
+                            Image(systemName: "arrow.up.right")
+                        }
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(Color.green)
+                    }
+                    .buttonStyle(.link)
+                }
+            }
+            .padding(4)
+        } label: {
+            Label("Earnings & Payout Telemetry", systemImage: "banknote.fill")
+                .font(.subheadline.bold())
+                .foregroundStyle(Color.green)
+        }
+    }
+
+    private func balanceTile(title: String, amount: String, caption: String, icon: String, tint: Color) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 4) {
+                Image(systemName: icon)
+                    .font(.system(size: 9))
+                    .foregroundStyle(tint)
+                Text(title)
+                    .font(.system(size: 9, weight: .bold, design: .monospaced))
+                    .foregroundStyle(.secondary)
+            }
+            Text(amount)
+                .font(.system(size: 14, weight: .bold, design: .monospaced))
+                .foregroundStyle(tint)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+            Text(caption)
+                .font(.system(size: 9))
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(10)
+        .background(Color.white.opacity(0.04), in: RoundedRectangle(cornerRadius: 8))
+        .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(tint.opacity(0.25)))
     }
 
     // MARK: – Mode picker

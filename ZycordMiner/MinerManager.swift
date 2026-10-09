@@ -69,6 +69,18 @@ final class MinerManager: ObservableObject {
     @Published var totalCores         = ProcessInfo.processInfo.processorCount
     @Published var userThreads        = max(1, ProcessInfo.processInfo.processorCount - 1)
 
+    // Live Pool & Earnings Telemetry
+    @Published var poolPendingBalance: String   = "0.000000 ZCD"
+    @Published var poolImmatureBalance: String  = "0.000000 ZCD"
+    @Published var poolTotalPaid: String        = "0.000000 ZCD"
+    @Published var poolPaymentsCount: Int       = 0
+    @Published var poolActiveWorkers: Int       = 0
+    @Published var poolShares24h: Int           = 0
+    @Published var poolHashRate: String         = "–"
+    @Published var payoutProgress: Double       = 0.0
+    @Published var lastPoolUpdate: String       = "–"
+    @Published var isRefreshingPool: Bool       = false
+
     // MARK: – Constants
     static let devAddress    = "027fe1ebf286b8a862cb080c47d2bce0457b92c77b785812cabe88eb71ea4d44"
     static let devFeePercent = 1
@@ -82,6 +94,8 @@ final class MinerManager: ObservableObject {
     private var logTask:        Task<Void, Never>?
     private var devFeeTimer:    Timer?
     private var queryTimer:     Timer?
+    private var poolTimer:      Timer?
+    private var activeMiningAddress: String = ""
 
     var uptimeFormatted: String {
         let h = uptimeSeconds / 3600
@@ -133,8 +147,17 @@ final class MinerManager: ObservableObject {
         process = makeXMRig(
             path: xmrigPath, poolURL: poolURL, login: login, algo: algo, threads: threads
         )
+        activeMiningAddress = cleanAddr
         startProcess()
         startTelemetryTimers(xmrigPath: xmrigPath, pool: poolURL, algo: algo, threads: threads)
+
+        // Poll pool stats immediately and every 15 seconds while mining
+        fetchPoolStats(address: cleanAddr)
+        poolTimer?.invalidate()
+        poolTimer = Timer.scheduledTimer(withTimeInterval: 15.0, repeats: true) { [weak self] _ in
+            guard let self = self, self.isRunning else { return }
+            self.fetchPoolStats(address: self.activeMiningAddress)
+        }
     }
 
     // MARK: – Start (solo)
@@ -179,6 +202,7 @@ final class MinerManager: ObservableObject {
         logTask?.cancel(); logTask = nil
         devFeeTimer?.invalidate(); devFeeTimer = nil
         queryTimer?.invalidate(); queryTimer = nil
+        poolTimer?.invalidate(); poolTimer = nil
         [process, devProcess].forEach { $0?.interrupt() }
         process = nil; devProcess = nil; logPipe = nil; inputPipe = nil
         isRunning = false
@@ -425,5 +449,67 @@ final class MinerManager: ObservableObject {
 
     func log(_ msg: String) {
         DispatchQueue.main.async { self.logLines.append(msg) }
+    }
+
+    // MARK: – Live Pool API Stats (AriaPool)
+
+    func fetchPoolStats(address: String) {
+        var cleanAddr = address.trimmingCharacters(in: .whitespacesAndNewlines)
+        if cleanAddr.hasPrefix("0x") || cleanAddr.hasPrefix("0X") {
+            cleanAddr = String(cleanAddr.dropFirst(2))
+        }
+        guard cleanAddr.count >= 20 else { return }
+
+        DispatchQueue.main.async { self.isRefreshingPool = true }
+
+        guard let url = URL(string: "https://pool.ariabrain.com/zcd-api/wallet/\(cleanAddr)") else {
+            DispatchQueue.main.async { self.isRefreshingPool = false }
+            return
+        }
+
+        var request = URLRequest(url: url)
+        request.timeoutInterval = 8.0
+        request.cachePolicy = .reloadIgnoringLocalCacheData
+
+        URLSession.shared.dataTask(with: request) { [weak self] data, _, _ in
+            guard let self = self else { return }
+            defer {
+                DispatchQueue.main.async { self.isRefreshingPool = false }
+            }
+
+            guard let data = data,
+                  let dict = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else {
+                return
+            }
+
+            let rawBal = (dict["balance"] as? NSNumber)?.doubleValue ?? 0.0
+            let rawImm = (dict["immature"] as? NSNumber)?.doubleValue ?? 0.0
+            let rawPaid = (dict["total_paid"] as? NSNumber)?.doubleValue ?? 0.0
+            let payments = (dict["payments"] as? NSNumber)?.intValue ?? 0
+            let activeWorkers = (dict["active_workers"] as? NSNumber)?.intValue ?? 0
+            let shares24h = (dict["shares_24h"] as? NSNumber)?.intValue ?? 0
+            let poolHr = (dict["hashrate"] as? NSNumber)?.doubleValue ?? 0.0
+
+            let balZCD = rawBal / 100_000_000.0
+            let immZCD = rawImm / 100_000_000.0
+            let paidZCD = rawPaid / 100_000_000.0
+            let progress = min(1.0, max(0.0, rawBal / 100_000_000.0)) // 1.00 ZCD min payout
+
+            let formatter = DateFormatter()
+            formatter.dateFormat = "HH:mm:ss"
+            let timeStr = formatter.string(from: Date())
+
+            DispatchQueue.main.async {
+                self.poolPendingBalance = String(format: "%.6f ZCD", balZCD)
+                self.poolImmatureBalance = String(format: "%.6f ZCD", immZCD)
+                self.poolTotalPaid = String(format: "%.6f ZCD", paidZCD)
+                self.poolPaymentsCount = payments
+                self.poolActiveWorkers = activeWorkers
+                self.poolShares24h = shares24h
+                self.poolHashRate = String(format: "%.1f H/s", poolHr)
+                self.payoutProgress = progress
+                self.lastPoolUpdate = timeStr
+            }
+        }.resume()
     }
 }

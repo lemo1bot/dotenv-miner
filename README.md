@@ -31,6 +31,17 @@ File details:
 
 - 🖥️ **Native macOS App** (SwiftUI, macOS 13+)
 - 🟢 **.env UI Theme** with custom terminal-inspired dark design
+- 💰 **Real-time Live Earnings & Balances**: Directly queried from AriaPool API:
+  - **Pending Balance** (ready for next payout)
+  - **Immature Balance** (locked block rewards maturing after ~240 confirmations)
+  - **Total Paid Out** with completed payout counter
+  - **Payout Progress Bar** toward minimum 1.00 ZCD threshold
+  - **Active Workers & 24h Shares** pool telemetry
+- 📈 **Real-Time Live Hashrate & Performance**:
+  - Live sparkline performance chart
+  - 10s / 60s / 15m speed breakdown
+  - Target difficulty, block height, share latency, accepted/rejected counters
+- ⚡ **Native XMRig v6.26.0 Bundled**: Pre-packaged ARM64 Apple Silicon binary supporting RandomX v2 (`rx/2`)
 - 🏊 **Pool Mining (AriaPool)**: Pre-configured for [AriaPool](https://pool.ariabrain.com/zcd.html) (`zcd.ariabrain.com:3343`, `rx/2`)
 - 🌐 **Custom Pool Support**: Connect to any Stratum pool with custom host, port, and algorithm
 - ⛏️ **Solo Mining**: Built-in support for solo mining directly against your local node
