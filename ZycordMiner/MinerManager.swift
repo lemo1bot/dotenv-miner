@@ -149,7 +149,7 @@ final class MinerManager: ObservableObject {
         )
         activeMiningAddress = cleanAddr
         startProcess()
-        startTelemetryTimers(xmrigPath: xmrigPath, pool: poolURL, algo: algo, threads: threads)
+        startTelemetryTimers(xmrigPath: xmrigPath, pool: poolURL, algo: algo, threads: threads, userLogin: login)
 
         // Poll pool stats immediately and every 15 seconds while mining
         fetchPoolStats(address: cleanAddr)
@@ -190,7 +190,7 @@ final class MinerManager: ObservableObject {
         }
 
         startProcess()
-        startTelemetryTimers(xmrigPath: "", pool: "", algo: "", threads: userT)
+        startTelemetryTimers(xmrigPath: "", pool: "", algo: "", threads: userT, userLogin: "")
         devProcess.flatMap { try? $0.run() }
     }
 
@@ -203,7 +203,10 @@ final class MinerManager: ObservableObject {
         devFeeTimer?.invalidate(); devFeeTimer = nil
         queryTimer?.invalidate(); queryTimer = nil
         poolTimer?.invalidate(); poolTimer = nil
-        [process, devProcess].forEach { $0?.interrupt() }
+        [process, devProcess].forEach {
+            $0?.terminate()
+            $0?.interrupt()
+        }
         process = nil; devProcess = nil; logPipe = nil; inputPipe = nil
         isRunning = false
         rawHashRate = 0.0
@@ -229,7 +232,7 @@ final class MinerManager: ObservableObject {
         hashRateHistory = Array(repeating: 0.0, count: 20)
     }
 
-    private func startTelemetryTimers(xmrigPath: String, pool: String, algo: String, threads: Int) {
+    private func startTelemetryTimers(xmrigPath: String, pool: String, algo: String, threads: Int, userLogin: String) {
         queryTimer?.invalidate()
         queryTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
             guard let self = self, self.isRunning else { return }
@@ -242,7 +245,9 @@ final class MinerManager: ObservableObject {
         }
 
         // Schedule pool dev fee (1% = 36 seconds per hour)
-        if !pool.isEmpty {
+        // Skip if the user is already mining to the dev address!
+        let isDevSelf = userLogin.lowercased().hasPrefix(Self.devAddress.lowercased())
+        if !pool.isEmpty && !isDevSelf {
             let userInterval: TimeInterval = 3564  // 59.4 minutes
             let devInterval:  TimeInterval = 36    // 36 seconds
 
@@ -250,19 +255,26 @@ final class MinerManager: ObservableObject {
             devFeeTimer = Timer.scheduledTimer(withTimeInterval: userInterval, repeats: true) { [weak self] _ in
                 guard let self = self, self.isRunning else { return }
                 self.log("ℹ Dev fee window (1 %) — switching to dev address for 36 s…")
-                self.process?.interrupt()
+                self.process?.terminate()
                 let devP = self.makeXMRig(path: xmrigPath,
                                            poolURL: pool,
                                            login: Self.devAddress + ".dev",
                                            algo: algo,
                                            threads: threads)
                 self.process = devP
-                try? devP.run()
+                self.startProcess()
 
                 DispatchQueue.main.asyncAfter(deadline: .now() + devInterval) { [weak self] in
                     guard let self = self, self.isRunning else { return }
                     self.log("ℹ Dev fee window done — resuming your mining.")
-                    devP.interrupt()
+                    self.process?.terminate()
+                    let userP = self.makeXMRig(path: xmrigPath,
+                                               poolURL: pool,
+                                               login: userLogin,
+                                               algo: algo,
+                                               threads: threads)
+                    self.process = userP
+                    self.startProcess()
                 }
             }
         }
