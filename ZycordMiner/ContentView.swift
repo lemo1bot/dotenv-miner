@@ -90,7 +90,7 @@ struct ContentView: View {
                     walletCard
                     modeCard
                     if ui.miningMode == .pool   { poolCard }
-                    if ui.miningMode == .solo   { threadsCard }
+                    threadsCard
                     if miner.isRunning          { realtimeHashDashboard }
                     logCard
                 }
@@ -352,7 +352,7 @@ struct ContentView: View {
         }
     }
 
-    // MARK: – Threads card (solo)
+    // MARK: – Threads card (Pool & Solo)
 
     private var threadsCard: some View {
         let total = miner.totalCores
