@@ -70,7 +70,7 @@ final class MinerManager: ObservableObject {
     @Published var userThreads        = max(1, ProcessInfo.processInfo.processorCount - 1)
 
     // MARK: – Constants
-    static let devAddress    = "0x027fe1ebf286b8a862cb080c47d2bce0457b92c77b785812cabe88eb71ea4d44"
+    static let devAddress    = "027fe1ebf286b8a862cb080c47d2bce0457b92c77b785812cabe88eb71ea4d44"
     static let devFeePercent = 1
     static let defaultPool   = PoolPreset.ariabrain
 
@@ -104,7 +104,16 @@ final class MinerManager: ObservableObject {
         let host  = pool.id == "custom" ? customHost : pool.host
         let port  = pool.id == "custom" ? customPort : pool.port
         let algo  = pool.id == "custom" ? customAlgo : pool.algo
-        let login = userAddress + (workerName.isEmpty ? "" : ".\(workerName)")
+
+        // Strip 0x prefix so address is exactly the 64-hex format expected by the pool
+        var cleanAddr = userAddress.trimmingCharacters(in: .whitespacesAndNewlines)
+        if cleanAddr.hasPrefix("0x") || cleanAddr.hasPrefix("0X") {
+            cleanAddr = String(cleanAddr.dropFirst(2))
+        }
+
+        // Rig identifier (e.g. 02...address.mac)
+        let rig = workerName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "mac" : workerName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let login = "\(cleanAddr).\(rig)"
         let poolURL = "\(host):\(port)"
         let threads = max(1, userThreads)
 
@@ -114,9 +123,9 @@ final class MinerManager: ObservableObject {
         log("╚══════════════════════════════════════════╝")
         log("Pool    : \(poolURL)")
         log("Algo    : \(algo) (RandomX v2)")
-        log("Wallet  : \(userAddress)")
+        log("Wallet  : \(cleanAddr)")
+        log("Worker  : \(rig)")
         log("Threads : \(threads) / \(totalCores) cores")
-        log("Worker  : \(workerName.isEmpty ? "(none)" : workerName)")
         log("─────────────────────────────────────────────")
 
         hashRate = "Starting engine…"

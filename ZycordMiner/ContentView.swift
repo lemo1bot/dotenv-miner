@@ -2,7 +2,7 @@ import SwiftUI
 
 final class UIState: ObservableObject {
     @Published var userAddress = ""
-    @Published var workerName  = ""
+    @Published var workerName  = "mac"
     @Published var addressError = ""
     @Published var miningMode: MiningMode = .pool
     @Published var selectedPreset = PoolPreset.ariabrain
@@ -256,9 +256,9 @@ struct ContentView: View {
                         .font(.caption).foregroundStyle(.orange)
                 }
                 HStack {
-                    Text("Worker name (optional):")
+                    Text("Worker name:")
                         .font(.caption).foregroundStyle(.secondary)
-                    TextField("rig1", text: $ui.workerName)
+                    TextField("mac", text: $ui.workerName)
                         .textFieldStyle(.roundedBorder)
                         .frame(maxWidth: 160)
                         .font(.system(.caption, design: .monospaced))
