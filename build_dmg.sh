@@ -48,6 +48,15 @@ mkdir -p "$APP_BUNDLE/Contents/MacOS" "$APP_BUNDLE/Contents/Resources"
 cp "$BUILD_DIR/$BUNDLE_NAME" "$APP_BUNDLE/Contents/MacOS/$BUNDLE_NAME"
 chmod +x "$APP_BUNDLE/Contents/MacOS/$BUNDLE_NAME"
 
+if [[ -f "$PROJECT_DIR/xmrig" ]]; then
+    cp "$PROJECT_DIR/xmrig" "$APP_BUNDLE/Contents/MacOS/xmrig"
+    chmod +x "$APP_BUNDLE/Contents/MacOS/xmrig"
+    cp "$PROJECT_DIR/xmrig" "$APP_BUNDLE/Contents/Resources/xmrig"
+    chmod +x "$APP_BUNDLE/Contents/Resources/xmrig"
+    codesign -s - --force "$APP_BUNDLE/Contents/MacOS/xmrig"
+    codesign -s - --force "$APP_BUNDLE/Contents/Resources/xmrig"
+fi
+
 cp "$PROJECT_DIR/AppIcon.icns" "$APP_BUNDLE/Contents/Resources/AppIcon.icns"
 cp "$PROJECT_DIR/ZycordMiner/ZycordMiner/Assets.xcassets/Logo.imageset/logo.png" "$APP_BUNDLE/Contents/Resources/Logo.png"
 echo -n "APPL????" > "$APP_BUNDLE/Contents/PkgInfo"
