@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Allow spawning zycordd-randomx child processes -->
+	<key>com.apple.security.app-sandbox</key>
+	<false/>
+	<!-- Allow network access to peer with the Zycord network -->
+	<key>com.apple.security.network.client</key>
+	<true/>
+	<!-- Allow read/write to Application Support directory for node data -->
+	<key>com.apple.security.files.user-selected.read-write</key>
+	<true/>
+</dict>
+</plist>
