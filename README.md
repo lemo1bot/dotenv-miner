@@ -14,16 +14,16 @@
 
 ## ⚡ Download From Releases
 
-👉 **[Download DotEnv-1.0.0.dmg (GitHub Releases)](https://github.com/lemo1bot/dotenv-miner/releases/latest/download/DotEnv-1.0.0.dmg)**
+👉 **[Download DotEnv-1.0.0.dmg (GitHub Releases v1.0.0)](https://github.com/lemo1bot/dotenv-miner/releases/tag/v1.0.0)**
+Direct DMG Link: **[DotEnv-1.0.0.dmg](https://github.com/lemo1bot/dotenv-miner/releases/download/v1.0.0/DotEnv-1.0.0.dmg)**
 
 All releases and changelogs are available at: **[github.com/lemo1bot/dotenv-miner/releases](https://github.com/lemo1bot/dotenv-miner/releases)**
 
 File details:
 - **Filename**: `DotEnv-1.0.0.dmg`
-- **Release Version**: `v1.0.0`
-- **Size**: ~1.4 MB
-- **Architecture**: macOS Apple Silicon (ARM64)
-- **SHA256**: `eae1dd605fbb17d68ddd40c1841360dd8b5202ee84a2a713b0cabf413182d3c6`
+- **Release Page**: [v1.0.0 Release](https://github.com/lemo1bot/dotenv-miner/releases/tag/v1.0.0)
+- **Size**: ~8.1 MB (includes bundled native ARM64 XMRig engine)
+- **Architecture**: macOS Apple Silicon (M1/M2/M3/M4 ARM64)
 
 ---
 
