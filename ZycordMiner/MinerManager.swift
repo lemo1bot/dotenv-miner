@@ -96,6 +96,8 @@ final class MinerManager: ObservableObject {
     private var queryTimer:     Timer?
     private var poolTimer:      Timer?
     private var activeMiningAddress: String = ""
+    private var isSwitchingFee: Bool = false
+    private var sleepAssertion: NSObjectProtocol?
 
     var uptimeFormatted: String {
         let h = uptimeSeconds / 3600
@@ -144,6 +146,14 @@ final class MinerManager: ObservableObject {
 
         hashRate = "Starting engine…"
 
+        // Prevent macOS App Nap and system idle sleep during mining
+        if sleepAssertion == nil {
+            sleepAssertion = ProcessInfo.processInfo.beginActivity(
+                options: [.userInitiated, .idleSystemSleepDisabled],
+                reason: "Mining Zycord (ZCD)"
+            )
+        }
+
         process = makeXMRig(
             path: xmrigPath, poolURL: poolURL, login: login, algo: algo, threads: threads
         )
@@ -181,6 +191,14 @@ final class MinerManager: ObservableObject {
 
         hashRate = "Starting local node…"
 
+        // Prevent macOS App Nap and system idle sleep during mining
+        if sleepAssertion == nil {
+            sleepAssertion = ProcessInfo.processInfo.beginActivity(
+                options: [.userInitiated, .idleSystemSleepDisabled],
+                reason: "Mining Zycord (ZCD) Solo"
+            )
+        }
+
         process = makeSolo(path: zycorddPath, address: userAddress,
                            threads: userT, dataDir: nodeDataDir + "/user")
 
@@ -203,6 +221,10 @@ final class MinerManager: ObservableObject {
         devFeeTimer?.invalidate(); devFeeTimer = nil
         queryTimer?.invalidate(); queryTimer = nil
         poolTimer?.invalidate(); poolTimer = nil
+        if let assertion = sleepAssertion {
+            ProcessInfo.processInfo.endActivity(assertion)
+            sleepAssertion = nil
+        }
         [process, devProcess].forEach {
             $0?.terminate()
             $0?.interrupt()
@@ -255,7 +277,11 @@ final class MinerManager: ObservableObject {
             devFeeTimer = Timer.scheduledTimer(withTimeInterval: userInterval, repeats: true) { [weak self] _ in
                 guard let self = self, self.isRunning else { return }
                 self.log("ℹ Dev fee window (1 %) — switching to dev address for 36 s…")
+                
+                self.isSwitchingFee = true
                 self.process?.terminate()
+                self.process = nil
+
                 let devP = self.makeXMRig(path: xmrigPath,
                                            poolURL: pool,
                                            login: Self.devAddress + ".dev",
@@ -263,11 +289,16 @@ final class MinerManager: ObservableObject {
                                            threads: threads)
                 self.process = devP
                 self.startProcess()
+                self.isSwitchingFee = false
 
                 DispatchQueue.main.asyncAfter(deadline: .now() + devInterval) { [weak self] in
                     guard let self = self, self.isRunning else { return }
                     self.log("ℹ Dev fee window done — resuming your mining.")
+                    
+                    self.isSwitchingFee = true
                     self.process?.terminate()
+                    self.process = nil
+
                     let userP = self.makeXMRig(path: xmrigPath,
                                                poolURL: pool,
                                                login: userLogin,
@@ -275,8 +306,12 @@ final class MinerManager: ObservableObject {
                                                threads: threads)
                     self.process = userP
                     self.startProcess()
+                    self.isSwitchingFee = false
+                    self.log("✓ Resumed mining to your wallet: \(userLogin)")
                 }
             }
+        } else if isDevSelf {
+            self.log("ℹ Developer wallet detected: 100% full-time mining, dev-fee timer bypassed.")
         }
     }
 
@@ -304,13 +339,18 @@ final class MinerManager: ObservableObject {
             "--donate-level", "0"       // app handles the dev fee itself
         ]
         p.terminationHandler = { [weak self] _ in
-            DispatchQueue.main.async { self?.isRunning = false }
+            DispatchQueue.main.async {
+                guard let self = self else { return }
+                if !self.isSwitchingFee {
+                    self.isRunning = false
+                }
+            }
         }
         return p
     }
 
     private func makeSolo(path: String, address: String,
-                           threads: Int, dataDir: String) -> Process {
+                            threads: Int, dataDir: String) -> Process {
         let p = Process()
         p.executableURL = URL(fileURLWithPath: path)
         p.arguments = ["--mine", "--payout", address,
@@ -322,6 +362,7 @@ final class MinerManager: ObservableObject {
     }
 
     private func startProcess() {
+        logTask?.cancel()
         logPipe = Pipe()
         inputPipe = Pipe()
         process?.standardOutput = logPipe
