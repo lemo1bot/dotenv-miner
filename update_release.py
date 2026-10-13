@@ -63,7 +63,7 @@ def main():
     patch_url = f"https://api.github.com/repos/{owner}/{repo}/releases/{release_id}"
     patch_data = json.dumps({
         "name": ".env One Click Miner v1.0.0",
-        "body": "Official macOS Release for .env One Click Miner.\n\n### ⚡ What's New:\n- 1-Click Multi-Coin Wallet Generation (Zycord ZCD, ConnectCoin XCC, Common Foundry CMFD, TrueNorth TNC, Privacy Bank Chain PBC)\n- Dual Zycord Address Support (Fix 02… vs Temporary 01…)\n- 100% Non-Custodial CSPRNG local key derivation with BIP-39 12-word recovery seed\n- Real-Time Live Hashrate, Difficulty & Estimated Token Earnings (1h, 24h, 30d)\n- Native Apple Silicon ARM64 performance with App Nap prevention\n- 1% transparent developer fee"
+        "body": "Official macOS Release for .env One Click Miner.\n\n### ⚡ Supported Coins & Engines:\n- **Zycord (ZCD)**: RandomX v2 (`rx/2`) via bundled native ARM64 XMRig\n- **ConnectCoin (XCC)**: Pay-to-Connect (`rx/0`) via native Stratum Bridge\n- **Common Foundry (CMFD)**: ForgeMatrix AI PoW via native stratum server\n- **TrueNorth (TNC)**: Bitcoin + RandomX (`rx/0`) via native Stratum Bridge\n- **Privacy Bank Chain (PBC)**: Post-Quantum Privacy (`rx/pbc`) via native PBCMiner\n- **Blocknet (BNT)**: Argon2id PoW via bundled native ARM64 Seine\n- **Parano1d (NOID)**: Proof-Native L1 (`Poseidon2b`) via bundled native ARM64 Parano1d node\n\n### 🔑 1-Click Wallet Generation:\n- 100% Client-side CSPRNG key generation for all 7 coins\n- Real-time 12-word recovery seed phrases and private keys\n- Zero cloud storage / non-custodial guarantee\n- Zycord Fix (02…) and Temporary stealth (01…) addresses\n\n### 🖥️ Window & UI Features:\n- Fully resizable window (freely adjustable height and width)\n- Horizontal token carousel with quick navigation\n- Live hashrate, difficulty, and estimated token earnings\n- Native Apple Silicon performance with macOS App Nap prevention"
     }).encode("utf-8")
     patch_req = urllib.request.Request(
         patch_url,
@@ -97,7 +97,7 @@ def main():
                 print(f"Warning: Could not delete old asset: {e}")
 
     # 4. Upload fresh DMG
-    print("→ Uploading new DotEnv-1.0.0.dmg (8.3 MB)…")
+    print(f"→ Uploading new DotEnv-1.0.0.dmg ({dmg_size_mb:.2f} MB)…")
     upload_url = f"{upload_base}?name=DotEnv-1.0.0.dmg"
     with open(dmg_path, "rb") as f:
         file_bytes = f.read()
