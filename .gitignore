@@ -6,3 +6,7 @@ DotEnv
 *.tar.gz
 pbcminer_v2/
 
+parano1d-cli
+parano1d-miner
+seine-data/
+test_*

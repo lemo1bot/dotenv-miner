@@ -948,6 +948,23 @@ struct ContentView: View {
 
                     Text("Connected to \(ui.selectedCoin.name) stratum. 1% app developer fee disclosed.")
                         .font(.caption2).foregroundStyle(.secondary)
+
+                    if ui.selectedCoin == .commonfoundry {
+                        HStack(alignment: .top, spacing: 8) {
+                            Image(systemName: "exclamationmark.circle.fill")
+                                .foregroundStyle(.orange)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Common Foundry (CMFD) GPU FORGEMATRIX Notice")
+                                    .font(.caption.bold())
+                                    .foregroundStyle(.orange)
+                                Text("CMFD utilizes AI forward-pass inference proof-of-work (aria-energy-cmfd) with TLS certificate pinning requiring 8 GB+ VRAM. For Mac CPU mining, Zycord (ZCD), TrueNorth (TNC), PBC, Blocknet (BNT) and Parano1d (NOID) are recommended.")
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                        .padding(8)
+                        .background(Color.orange.opacity(0.08), in: RoundedRectangle(cornerRadius: 6))
+                    }
                 } else {
                     HStack(spacing: 10) {
                         VStack(alignment: .leading, spacing: 4) {
@@ -1372,16 +1389,21 @@ struct ContentView: View {
             if s.count < 60 { return "PBC address looks too short (expected ~97 chars)" }
             return ""
         case .blocknet:
-            if !s.hasPrefix("S") && !s.hasPrefix("N") && !s.hasPrefix("B") {
-                return "Blocknet address should start with S… or N…"
+            let b58Set = CharacterSet(charactersIn: "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz")
+            if s.rangeOfCharacter(from: b58Set.inverted) != nil {
+                return "Blocknet address must be valid Base58"
             }
-            if s.count < 60 { return "Blocknet address looks too short" }
+            if s.count < 80 || s.count > 105 {
+                return "Blocknet address should be ~93 characters (68-byte stealth address)"
+            }
             return ""
         case .parano1d:
             if !s.lowercased().hasPrefix("o1") {
                 return "Parano1d address must start with o1…"
             }
-            if s.count < 30 { return "Parano1d address looks too short" }
+            if s.count < 50 || s.count > 70 {
+                return "Parano1d address should be 60 characters (Bech32m)"
+            }
             return ""
         }
     }
@@ -1391,10 +1413,10 @@ struct ContentView: View {
         case .zycord:        return "027f… (64 hex characters, starts with 02)"
         case .connectcoin:   return "cc1p… (ConnectCoin Bech32m address)"
         case .commonfoundry: return "028a… (64 hex characters)"
-        case .truenorth:     return "north1z… (TrueNorth Bech32m address)"
+        case .truenorth:     return "north1z… (TrueNorth Bech32m address, 65 chars)"
         case .pulsemining:   return "Pbc… (97-character CryptoNote Base58 address)"
-        case .blocknet:      return "SEiNE… or S… (68-byte Base58 stealth address)"
-        case .parano1d:      return "o11q… (Bech32m address starting with o1)"
+        case .blocknet:      return "7pew… or SEiNE… (68-byte Base58 stealth address, ~93 chars)"
+        case .parano1d:      return "o1kw… (60-character Bech32m address starting with o1)"
         }
     }
 
@@ -1403,10 +1425,10 @@ struct ContentView: View {
         case .zycord:        return "Persistent Fix Address starts with 02 (required for mining rewards)"
         case .connectcoin:   return "Pay-to-Connect Bech32m witness-v1 mainnet address"
         case .commonfoundry: return "Mainnet 64-hexadecimal inference mining address"
-        case .truenorth:     return "Native SegWit Bech32m address (starts with north1z…)"
+        case .truenorth:     return "Native SegWit P2QRH Bech32m address (starts with north1z…)"
         case .pulsemining:   return "CryptoNote private banking address (starts with Pbc…)"
-        case .blocknet:      return "Blocknet stealth address (starts with S… or SEiNE…)"
-        case .parano1d:      return "Proof-native Bech32m address (starts with o1…)"
+        case .blocknet:      return "Blocknet Ristretto255 stealth address (~93 chars Base58)"
+        case .parano1d:      return "Proof-native Bech32m address (60 chars, starts with o1…)"
         }
     }
 
@@ -1443,21 +1465,29 @@ struct ContentView: View {
 
 // MARK: – Window Resizability & Fullscreen Enabler
 
+final class WindowHelperView: NSView {
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        guard let window = self.window else { return }
+        window.styleMask.insert([.resizable, .miniaturizable, .closable, .titled])
+        window.collectionBehavior.insert([.fullScreenPrimary, .fullScreenAllowsTiling])
+        window.minSize = NSSize(width: 520, height: 400)
+        window.maxSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
+        window.showsResizeIndicator = true
+    }
+}
+
 struct WindowAccessor: NSViewRepresentable {
     func makeNSView(context: Context) -> NSView {
-        let view = NSView()
-        DispatchQueue.main.async {
-            if let window = view.window {
-                window.styleMask.insert([.resizable, .miniaturizable, .closable, .titled])
-                window.collectionBehavior.insert([.fullScreenPrimary, .fullScreenAllowsTiling])
-                window.minSize = NSSize(width: 580, height: 480)
-                window.maxSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
-            }
-        }
-        return view
+        return WindowHelperView()
     }
 
-    func updateNSView(_ nsView: NSView, context: Context) {}
+    func updateNSView(_ nsView: NSView, context: Context) {
+        if let window = nsView.window {
+            window.styleMask.insert([.resizable, .miniaturizable, .closable, .titled])
+            window.showsResizeIndicator = true
+        }
+    }
 }
 
 

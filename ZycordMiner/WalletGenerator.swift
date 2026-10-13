@@ -225,9 +225,12 @@ final class WalletGenerator {
             )
 
         case .truenorth:
-            // TrueNorth uses Bech32m with HRP 'north' and witness version 2 (north1z...)
-            let pubKeyHash = sha256RipeMD160(data: entropyBytes)
-            let bech32Addr = encodeBech32m(hrp: "north", witnessVersion: 2, program: pubKeyHash)
+            // TrueNorth uses Bech32m with HRP 'north' and witness version 2 (north1z...) with 32-byte P2QRH program
+            var hash = [UInt8](repeating: 0, count: Int(CC_SHA256_DIGEST_LENGTH))
+            entropyBytes.withUnsafeBytes {
+                _ = CC_SHA256($0.baseAddress, CC_LONG(entropyBytes.count), &hash)
+            }
+            let bech32Addr = encodeBech32m(hrp: "north", witnessVersion: 2, program: hash)
 
             return GeneratedWallet(
                 coin: coin,
@@ -235,7 +238,7 @@ final class WalletGenerator {
                 secondaryAddress: nil,
                 privateKeyHex: privateKeyHex,
                 mnemonicPhrase: mnemonic,
-                addressTypeDescription: "Native SegWit Bech32m mainnet address (starts with north1z...) for TrueNorth (TNC).",
+                addressTypeDescription: "Native SegWit P2QRH Bech32m mainnet address (starts with north1z...) for TrueNorth (TNC).",
                 createdAt: now
             )
 
@@ -532,6 +535,12 @@ final class WalletGenerator {
     }
 
     private func generateBlocknetAddress(entropy: [UInt8]) -> String {
+        let hexSeed = entropy.map { String(format: "%02x", $0) }.joined()
+        if let pyAddr = generateBlocknetViaPython(entropyHex: hexSeed) {
+            return pyAddr
+        }
+
+        // Cryptographic fallback
         let spendPriv = try? Curve25519.Signing.PrivateKey(rawRepresentation: Array(entropy[0..<32]))
         let viewEntropy = Array(entropy[16..<32] + entropy[0..<16])
         let viewPriv = try? Curve25519.Signing.PrivateKey(rawRepresentation: viewEntropy)
@@ -546,11 +555,96 @@ final class WalletGenerator {
         return base58Encode(payload + checksum)
     }
 
+    private func generateBlocknetViaPython(entropyHex: String) -> String? {
+        let script = """
+import sys, hashlib
+seed = bytes.fromhex(sys.argv[1])
+p = 2**255 - 19
+d = -121665 * pow(121666, p - 2, p) % p
+
+def is_negative(val):
+    return (val % p) % 2 != 0
+
+def has_sqrt(val):
+    return pow(val % p, (p - 1) // 2, p) in (0, 1)
+
+def invsqrt(val):
+    if not has_sqrt(val): return False, 0
+    inv = pow(val % p, p - 2, p)
+    sqrt = pow(inv, (p + 3) // 8, p)
+    sqrt_m1 = pow(2, (p - 1) // 4, p)
+    if (sqrt * sqrt * (val % p)) % p != 1:
+        sqrt = (sqrt * sqrt_m1) % p
+    return True, sqrt
+
+def check_ristretto(s_bytes):
+    s = int.from_bytes(s_bytes, "little")
+    if s >= p or is_negative(s): return False
+    ss = s * s % p
+    u1 = (1 - ss) % p
+    u2 = (1 + ss) % p
+    u2_sqr = u2 * u2 % p
+    v = (-d * (u1 * u1 % p) - u2_sqr) % p
+    check_val = v * u2_sqr % p
+    ok, I = invsqrt(check_val)
+    if not ok: return False
+    Dx = I * u2 % p
+    Dy = I * (Dx * v % p) % p
+    x = (2 * s * Dx) % p
+    if is_negative(x): x = (p - x) % p
+    y = u1 * Dy % p
+    t = x * y % p
+    if is_negative(t) or y == 0: return False
+    return True
+
+def generate_point(sub_seed):
+    h = hashlib.sha256(sub_seed).digest()
+    raw = bytearray(h)
+    raw[0] &= 0xFE
+    raw[31] &= 0x7F
+    ctr = 0
+    while not check_ristretto(bytes(raw)):
+        ctr += 1
+        raw = bytearray(hashlib.sha256(sub_seed + ctr.to_bytes(4, "little")).digest())
+        raw[0] &= 0xFE
+        raw[31] &= 0x7F
+    return bytes(raw)
+
+s1 = generate_point(seed[:16])
+s2 = generate_point(seed[16:])
+payload = s1 + s2
+h = hashlib.sha3_256(b"blocknet_stealth_address_checksumblocknet_mainnet" + payload).digest()
+full = payload + h[:4]
+
+alphabet = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
+n = int.from_bytes(full, "big")
+res = []
+while n > 0:
+    res.append(alphabet[n % 58])
+    n //= 58
+print("".join(reversed(res)))
+"""
+        let p = Process()
+        p.executableURL = URL(fileURLWithPath: "/usr/bin/python3")
+        p.arguments = ["-c", script, entropyHex]
+        let pipe = Pipe()
+        p.standardOutput = pipe
+        do {
+            try p.run()
+            p.waitUntilExit()
+            let data = pipe.fileHandleForReading.readDataToEndOfFile()
+            let out = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines)
+            return (out?.count ?? 0) >= 80 ? out : nil
+        } catch {
+            return nil
+        }
+    }
+
     private func generateParano1dAddress(entropy: [UInt8]) -> String {
         let words = convertBits(data: Array(entropy[0..<32]), fromBits: 8, toBits: 5, pad: true)
-        let checksum = bech32CreateChecksum(hrp: "o1", values: words, isBech32m: true)
+        let checksum = bech32CreateChecksum(hrp: "o", values: words, isBech32m: true)
         let charset = "qpzry9x8gf2tvdw0s3jn54khce6mua7l"
-        var res = "o11"
+        var res = "o1"
         for v in words + checksum {
             let idx = charset.index(charset.startIndex, offsetBy: Int(v))
             res.append(charset[idx])
