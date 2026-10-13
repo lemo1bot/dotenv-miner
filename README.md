@@ -1,9 +1,9 @@
-# .env — Zycord (ZCD) macOS Miner
+# .env One Click Miner — macOS Multi-Coin Miner
 
 <p align="center">
-  <img src="ZycordMiner/ZycordMiner/Assets.xcassets/Logo.imageset/logo.png" width="160" alt=".env Miner Logo" />
+  <img src="ZycordMiner/ZycordMiner/Assets.xcassets/Logo.imageset/logo.png" width="160" alt=".env One Click Miner Logo" />
   <br />
-  <strong>High-performance, transparent RandomX CPU miner for Zycord (ZCD) on macOS.</strong>
+  <strong>High-performance, transparent RandomX CPU 1-click miner for macOS (Zycord, ConnectCoin, Common Foundry, TrueNorth, Privacy Bank Chain).</strong>
   <br /><br />
   <a href="https://github.com/lemo1bot/dotenv-miner/releases/latest/download/DotEnv-1.0.0.dmg">
     <img src="https://img.shields.io/badge/Download_DMG-v1.0.0-00FF66?style=for-the-badge&logo=apple&logoColor=black" alt="Download DotEnv DMG" />

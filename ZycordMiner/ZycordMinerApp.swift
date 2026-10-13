@@ -6,6 +6,7 @@ struct DotEnvApp: App {
         WindowGroup {
             ContentView()
                 .frame(minWidth: 620, minHeight: 720)
+                .navigationTitle(".env One Click Miner")
         }
         .windowStyle(.titleBar)
         .windowResizability(.contentMinSize)

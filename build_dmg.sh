@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ============================================================
-#  build_dmg.sh — Build .env (Zycord Miner) and package as DMG
+#  build_dmg.sh — Build .env One Click Miner and package as DMG
 #
 #  Usage:
 #    ./build_dmg.sh
@@ -8,7 +8,7 @@
 
 set -euo pipefail
 
-APP_NAME=".env"
+APP_NAME=".env One Click Miner"
 BUNDLE_NAME="DotEnv"
 VERSION="1.0.0"
 PROJECT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -17,10 +17,10 @@ DMG_DIR="$PROJECT_DIR/dist"
 DEV_ADDRESS="0x027fe1ebf286b8a862cb080c47d2bce0457b92c77b785812cabe88eb71ea4d44"
 
 echo ""
-echo "╔══════════════════════════════════════════╗"
-echo "║  .env (Zycord Miner) DMG Builder         ║"
-echo "║  1 % developer fee — transparent         ║"
-echo "╚══════════════════════════════════════════╝"
+echo "╔══════════════════════════════════════════════════════════╗"
+echo "║  .env One Click Miner DMG Builder                        ║"
+echo "║  1 % developer fee — transparent                         ║"
+echo "╚══════════════════════════════════════════════════════════╝"
 echo ""
 echo "  App name  : $APP_NAME"
 echo "  Version   : $VERSION"
@@ -108,7 +108,7 @@ rm -f "$DMG_OUT"
 
 echo "→ Creating DMG image…"
 hdiutil create \
-  -volname "DotEnv-Miner" \
+  -volname "DotEnv One Click Miner" \
   -srcfolder "$DMG_STAGING" \
   -ov \
   -format UDZO \

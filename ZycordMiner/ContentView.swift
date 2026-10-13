@@ -183,7 +183,7 @@ struct ContentView: View {
                     Text(".env")
                         .font(.system(size: 20, weight: .bold, design: .monospaced))
                         .foregroundStyle(Color.green)
-                    Text("Multi-Coin Miner")
+                    Text("One Click Miner")
                         .font(.caption.bold())
                         .foregroundStyle(.secondary)
                 }

@@ -178,10 +178,10 @@ final class MinerManager: ObservableObject {
         let threads = max(1, userThreads)
         let devAddr = coin.devPayoutAddress
 
-        log("╔══════════════════════════════════════════╗")
-        log("║  .env Miner  ·  \(coin.name) (\(coin.symbol))  ·  Pool ║")
-        log("║  1 % developer fee — disclosed           ║")
-        log("╚══════════════════════════════════════════╝")
+        log("╔══════════════════════════════════════════════════════════╗")
+        log("║  .env One Click Miner  ·  \(coin.name) (\(coin.symbol))  ·  Pool ║")
+        log("║  1 % developer fee — disclosed                           ║")
+        log("╚══════════════════════════════════════════════════════════╝")
         log("Coin    : \(coin.name) (\(coin.symbol))")
         log("Pool    : \(poolURL)")
         log("Algo    : \(algo) (\(coin.tag))")
@@ -229,10 +229,10 @@ final class MinerManager: ObservableObject {
         let devT  = max(1, Int(Double(total) * 0.01))   // 1 %
         let userT = max(1, userThreads)
 
-        log("╔══════════════════════════════════════════╗")
-        log("║  .env Miner  ·  ZCD/RandomX  ·  Solo    ║")
-        log("║  1 % developer fee — disclosed           ║")
-        log("╚══════════════════════════════════════════╝")
+        log("╔══════════════════════════════════════════════════════════╗")
+        log("║  .env One Click Miner  ·  ZCD/RandomX  ·  Solo           ║")
+        log("║  1 % developer fee — disclosed                           ║")
+        log("╚══════════════════════════════════════════════════════════╝")
         log("User   : \(userT) thread(s)")
         log("Dev    : \(devT) thread(s) — 1 % fee")
         log("─────────────────────────────────────────────")
