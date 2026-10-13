@@ -46,30 +46,30 @@ enum SupportedCoin: String, CaseIterable, Identifiable {
     var defaultAlgo: String {
         switch self {
         case .zycord:        return "rx/2"
-        case .connectcoin:   return "rx/0"
+        case .connectcoin:   return "rx/2"
         case .commonfoundry: return "rx/0"
-        case .truenorth:     return "rx/0"
-        case .pulsemining:   return "rx/0"
+        case .truenorth:     return "rx/2"
+        case .pulsemining:   return "rx/pbc"
         }
     }
 
     var defaultHost: String {
         switch self {
         case .zycord:        return "zcd.ariabrain.com"
-        case .connectcoin:   return "pool.connectcoincrypto.com"
+        case .connectcoin:   return "conn.ariabrain.com"
         case .commonfoundry: return "pool.ariabrain.com"
-        case .truenorth:     return "pool.truenorthmining.com"
-        case .pulsemining:   return "pool.privbank.finance"
+        case .truenorth:     return "north.ariabrain.com"
+        case .pulsemining:   return "pbc.ariabrain.com"
         }
     }
 
     var defaultPort: Int {
         switch self {
         case .zycord:        return 3343
-        case .connectcoin:   return 48173
+        case .connectcoin:   return 3345
         case .commonfoundry: return 3344
-        case .truenorth:     return 3333
-        case .pulsemining:   return 8888
+        case .truenorth:     return 3348
+        case .pulsemining:   return 3342
         }
     }
 
