@@ -147,8 +147,13 @@ struct ContentView: View {
                     logCard
                 }
                 .padding(20)
+                .frame(maxWidth: .infinity)
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
+        .frame(minWidth: 640, idealWidth: 860, maxWidth: .infinity,
+               minHeight: 720, idealHeight: 960, maxHeight: .infinity)
+        .background(WindowAccessor())
         .background(Color(nsColor: .windowBackgroundColor))
         .onAppear {
             setup.checkAndBuild()
@@ -156,6 +161,7 @@ struct ContentView: View {
                 miner.fetchPoolStats(address: ui.userAddress)
             }
         }
+
         .sheet(isPresented: $ui.showWalletGenSheet) {
             walletGenerationSheet
         }
@@ -1178,7 +1184,8 @@ struct ContentView: View {
                         .padding(8)
                         .frame(maxWidth: .infinity, alignment: .leading)
                     }
-                    .frame(height: 180)
+                    .frame(minHeight: 180, idealHeight: 240, maxHeight: 450)
+
                     .background(Color.black, in: RoundedRectangle(cornerRadius: 8))
                     .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Color.green.opacity(0.3)))
                     .onChange(of: miner.logLines.count) { _ in
@@ -1346,3 +1353,24 @@ struct ContentView: View {
         }
     }
 }
+
+// MARK: – Window Resizability & Fullscreen Enabler
+
+struct WindowAccessor: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSView {
+        let view = NSView()
+        DispatchQueue.main.async {
+            if let window = view.window {
+                window.styleMask.insert([.resizable, .miniaturizable, .closable, .titled, .fullScreen])
+                window.collectionBehavior.insert([.fullScreenPrimary, .fullScreenAllowsTiling])
+                window.minSize = NSSize(width: 640, height: 720)
+                window.maxSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
+                window.showsResizeIndicator = true
+            }
+        }
+        return view
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {}
+}
+

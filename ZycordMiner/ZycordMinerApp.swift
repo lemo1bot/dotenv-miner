@@ -5,13 +5,14 @@ struct DotEnvApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
-                .frame(minWidth: 620, minHeight: 720)
+                .frame(minWidth: 640, idealWidth: 860, maxWidth: .infinity,
+                       minHeight: 720, idealHeight: 960, maxHeight: .infinity)
                 .navigationTitle(".env One Click Miner")
         }
         .windowStyle(.titleBar)
-        .windowResizability(.contentMinSize)
         .commands {
             CommandGroup(replacing: .newItem) {}
         }
+
     }
 }
