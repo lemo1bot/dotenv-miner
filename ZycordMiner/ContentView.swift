@@ -139,7 +139,7 @@ struct ContentView: View {
                     feeDisclosureBanner
                     setupCard
                     walletCard
-                    if ui.miningMode == .pool && ui.selectedCoin == .zycord { earningsCard }
+                    if ui.miningMode == .pool { earningsCard }
                     modeCard
                     if ui.miningMode == .pool { poolCard }
                     threadsCard
@@ -157,8 +157,8 @@ struct ContentView: View {
         .background(Color(nsColor: .windowBackgroundColor))
         .onAppear {
             setup.checkAndBuild()
-            if !ui.userAddress.isEmpty && ui.addressError.isEmpty && ui.selectedCoin == .zycord {
-                miner.fetchPoolStats(address: ui.userAddress)
+            if !ui.userAddress.isEmpty && ui.addressError.isEmpty {
+                miner.fetchPoolStats(coin: ui.selectedCoin, address: ui.userAddress)
             }
         }
 
@@ -475,8 +475,8 @@ struct ContentView: View {
                         .font(.system(.body, design: .monospaced))
                         .onChange(of: ui.userAddress) { v in
                             ui.addressError = validateAddress(v, for: ui.selectedCoin)
-                            if ui.addressError.isEmpty && !v.isEmpty && ui.selectedCoin == .zycord {
-                                miner.fetchPoolStats(address: v)
+                            if ui.addressError.isEmpty && !v.isEmpty {
+                                miner.fetchPoolStats(coin: ui.selectedCoin, address: v)
                             }
                         }
                     Button {
@@ -484,8 +484,8 @@ struct ContentView: View {
                             let trimmed = s.trimmingCharacters(in: .whitespacesAndNewlines)
                             ui.userAddress = trimmed
                             ui.addressError = validateAddress(trimmed, for: ui.selectedCoin)
-                            if ui.addressError.isEmpty && !trimmed.isEmpty && ui.selectedCoin == .zycord {
-                                miner.fetchPoolStats(address: trimmed)
+                            if ui.addressError.isEmpty && !trimmed.isEmpty {
+                                miner.fetchPoolStats(coin: ui.selectedCoin, address: trimmed)
                             }
                         }
                     } label: { Image(systemName: "doc.on.clipboard") }
@@ -742,7 +742,7 @@ struct ContentView: View {
                             .fill(Color.green)
                             .frame(width: 8, height: 8)
                             .shadow(color: .green, radius: 4)
-                        Text("AriaPool Live Telemetry (\(ui.selectedCoin.symbol))")
+                        Text("\(ui.selectedCoin.name) Pool Telemetry (\(ui.selectedCoin.symbol))")
                             .font(.system(size: 11, weight: .bold, design: .monospaced))
                             .foregroundStyle(Color.green)
                     }
@@ -756,7 +756,7 @@ struct ContentView: View {
                     }
 
                     Button {
-                        miner.fetchPoolStats(address: ui.userAddress)
+                        miner.fetchPoolStats(coin: ui.selectedCoin, address: ui.userAddress)
                     } label: {
                         HStack(spacing: 4) {
                             if miner.isRefreshingPool {
@@ -789,7 +789,7 @@ struct ContentView: View {
                     balanceTile(
                         title: "IMMATURE BALANCE",
                         amount: miner.poolImmatureBalance,
-                        caption: "Locked (~240 conf)",
+                        caption: "Locked confirmations",
                         icon: "lock.circle.fill",
                         tint: .orange
                     )
@@ -805,10 +805,10 @@ struct ContentView: View {
 
                 Divider().opacity(0.2)
 
-                // Payout Progress Bar (Min payout 1.00 ZCD)
+                // Payout Progress Bar (Min payout 1.00 token)
                 VStack(alignment: .leading, spacing: 5) {
                     HStack {
-                        Text("PAYOUT PROGRESS (MIN 1.00 ZCD)")
+                        Text("PAYOUT PROGRESS (MIN 1.00 \(ui.selectedCoin.symbol))")
                             .font(.system(size: 9, weight: .bold, design: .monospaced))
                             .foregroundStyle(.secondary)
                         Spacer()
@@ -849,9 +849,17 @@ struct ContentView: View {
                     Button {
                         var clean = ui.userAddress.trimmingCharacters(in: .whitespacesAndNewlines)
                         if clean.hasPrefix("0x") || clean.hasPrefix("0X") { clean = String(clean.dropFirst(2)) }
-                        let urlStr = clean.isEmpty
-                            ? "https://pool.ariabrain.com/zcd.html"
-                            : "https://pool.ariabrain.com/zcd.html#\(clean)"
+                        let urlStr: String = {
+                            switch ui.selectedCoin {
+                            case .zycord:        return clean.isEmpty ? "https://pool.ariabrain.com/zcd.html" : "https://pool.ariabrain.com/zcd.html#\(clean)"
+                            case .connectcoin:   return clean.isEmpty ? "https://pool.ariabrain.com/conn.html" : "https://pool.ariabrain.com/conn.html#\(clean)"
+                            case .truenorth:     return clean.isEmpty ? "https://pool.ariabrain.com/north.html" : "https://pool.ariabrain.com/north.html#\(clean)"
+                            case .pulsemining:   return clean.isEmpty ? "https://pool.ariabrain.com/pbc.html" : "https://pool.ariabrain.com/pbc.html#\(clean)"
+                            case .blocknet:      return clean.isEmpty ? "https://bntpool.com" : "https://bntpool.com/#/miner/\(clean)"
+                            case .commonfoundry: return "https://commonfoundry.ai"
+                            case .parano1d:      return "https://parano1d.org"
+                            }
+                        }()
                         if let u = URL(string: urlStr) {
                             NSWorkspace.shared.open(u)
                         }
@@ -868,7 +876,7 @@ struct ContentView: View {
             }
             .padding(4)
         } label: {
-            Label("AriaPool Earnings Telemetry", systemImage: "banknote.fill")
+            Label("\(ui.selectedCoin.name) Earnings Telemetry", systemImage: "banknote.fill")
                 .font(.subheadline.bold())
                 .foregroundStyle(Color.green)
         }

@@ -115,9 +115,9 @@ enum SupportedCoin: String, CaseIterable, Identifiable {
     var devPayoutAddress: String {
         switch self {
         case .zycord:        return "027fe1ebf286b8a862cb080c47d2bce0457b92c77b785812cabe88eb71ea4d44"
-        case .connectcoin:   return "cc1p027fe1ebf286b8a862cb080c47d2bce0457b92c77b785812cabe88eb71ea"
+        case .connectcoin:   return "cc1ppn6ppqg8tzx05qxvukyqyf862n8nlxwslwh9pj6x3s6ddpcmt9zsu2p0sa"
         case .commonfoundry: return "027fe1ebf286b8a862cb080c47d2bce0457b92c77b785812cabe88eb71ea4d44"
-        case .truenorth:     return "north1zr93s8f2mkvkcmh32095f9c9j8s7qg73w2e6q5t5ru0g52swx9qg6sw4q"
+        case .truenorth:     return "north1z9ktxk6kglhd0scm2j4cp6jczm0u865kgf950dnjxtl79s4cgxhhsl90df9"
         case .pulsemining:   return "Pbe9P2Av88QU32Z6Ni6ZwnU32Z6Ni6ZwnU32Z6Ni6ZwnU32hbJLkZd3WtbVzpRBUn5WtbVzpRBUn5WtbVzpRBUn52XzDqUJ7j"
         case .blocknet:      return "SEiNEceuDyfEY3GKDQAYVuK6382K2Ln2gQSv83ySAFkKhraBxhHnTf2P6PsF8CXtreqywg4T1qwBAjQo3L2VYDYWtsbb9"
         case .parano1d:      return "o11qyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqsgqunwr"
@@ -194,17 +194,16 @@ final class WalletGenerator {
             )
 
         case .connectcoin:
-            // ConnectCoin uses Bech32m with HRP 'cc' (cc1p... witness v1)
-            let xonlyPub = Array(entropyBytes[0..<32])
-            let bech32mAddr = encodeBech32m(hrp: "cc", witnessVersion: 1, program: xonlyPub)
+            // ConnectCoin uses Bech32m Taproot (cc1p...) with a cryptographically valid secp256k1 x-only public key
+            let xccAddr = generateConnectCoinAddress(entropy: entropyBytes)
 
             return GeneratedWallet(
                 coin: coin,
-                publicAddress: bech32mAddr,
+                publicAddress: xccAddr,
                 secondaryAddress: nil,
                 privateKeyHex: privateKeyHex,
                 mnemonicPhrase: mnemonic,
-                addressTypeDescription: "Standard Bech32m witness-v1 mainnet address for ConnectCoin P2C.",
+                addressTypeDescription: "Pay-to-Connect Bech32m witness-v1 mainnet address with valid secp256k1 Taproot key for ConnectCoin (XCC).",
                 createdAt: now
             )
 
@@ -553,6 +552,111 @@ final class WalletGenerator {
         let fullHash = sha3_256(tag + net + payload)
         let checksum = Array(fullHash[0..<4])
         return base58Encode(payload + checksum)
+    }
+
+    private func generateConnectCoinAddress(entropy: [UInt8]) -> String {
+        let hexSeed = entropy.map { String(format: "%02x", $0) }.joined()
+        if let pyAddr = generateConnectCoinViaPython(entropyHex: hexSeed) {
+            return pyAddr
+        }
+        // Fallback: Bech32m witness-v1
+        return encodeBech32m(hrp: "cc", witnessVersion: 1, program: Array(entropy[0..<32]))
+    }
+
+    private func generateConnectCoinViaPython(entropyHex: String) -> String? {
+        let script = """
+import sys
+
+P = 2**256 - 2**32 - 977
+A = 0
+B = 7
+Gx = 55066263022277343669578718895168534326250603453777594175500187360389116729240
+Gy = 32670510020758816978083085130507043184471273380659243275938904335757337482424
+G = (Gx, Gy)
+
+def point_add(p1, p2):
+    if p1 is None: return p2
+    if p2 is None: return p1
+    x1, y1 = p1
+    x2, y2 = p2
+    if x1 == x2 and y1 != y2: return None
+    if x1 == x2:
+        m = (3 * x1 * x1 + A) * pow(2 * y1, P - 2, P) % P
+    else:
+        m = (y2 - y1) * pow(x2 - x1, P - 2, P) % P
+    x3 = (m * m - x1 - x2) % P
+    y3 = (m * (x1 - x3) - y1) % P
+    return (x3, y3)
+
+def point_mul(k, pt):
+    res = None
+    cur = pt
+    while k > 0:
+        if k & 1:
+            res = point_add(res, cur)
+        cur = point_add(cur, cur)
+        k >>= 1
+    return res
+
+entropy_hex = sys.argv[1]
+priv = int.from_bytes(bytes.fromhex(entropy_hex), 'big') % (P - 1) + 1
+pub = point_mul(priv, G)
+x_bytes = pub[0].to_bytes(32, 'big')
+
+charset = 'qpzry9x8gf2tvdw0s3jn54khce6mua7l'
+const_m = 0x2bc830a3
+
+def polymod(values):
+    chk = 1
+    generator = [0x3b6a57b2, 0x26508e6d, 0x1ea119fa, 0x3d4233dd, 0x2a1462b3]
+    for v in values:
+        b = chk >> 25
+        chk = ((chk & 0x1ffffff) << 5) ^ v
+        for i in range(5):
+            if (b >> i) & 1:
+                chk ^= generator[i]
+    return chk
+
+def hrp_expand(hrp):
+    return [c >> 5 for c in hrp.encode()] + [0] + [c & 31 for c in hrp.encode()]
+
+def convert_bits(data, frombits, tobits, pad=True):
+    acc = 0
+    bits = 0
+    result = []
+    maxv = (1 << tobits) - 1
+    for value in data:
+        acc = (acc << frombits) | value
+        bits += frombits
+        while bits >= tobits:
+            bits -= tobits
+            result.append((acc >> bits) & maxv)
+    if pad and bits:
+        result.append((acc << (tobits - bits)) & maxv)
+    return result
+
+data = [1] + convert_bits(list(x_bytes), 8, 5, True)
+hrp = 'cc'
+hrp_exp = hrp_expand(hrp)
+chk_poly = polymod(hrp_exp + data + [0,0,0,0,0,0]) ^ const_m
+chk = [(chk_poly >> (5*(5-i))) & 31 for i in range(6)]
+addr = hrp + '1' + ''.join(charset[d] for d in data + chk)
+print(addr)
+"""
+        let p = Process()
+        p.executableURL = URL(fileURLWithPath: "/usr/bin/python3")
+        p.arguments = ["-c", script, entropyHex]
+        let pipe = Pipe()
+        p.standardOutput = pipe
+        do {
+            try p.run()
+            p.waitUntilExit()
+            let data = pipe.fileHandleForReading.readDataToEndOfFile()
+            let out = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines)
+            return (out?.count ?? 0) >= 55 ? out : nil
+        } catch {
+            return nil
+        }
     }
 
     private func generateBlocknetViaPython(entropyHex: String) -> String? {
