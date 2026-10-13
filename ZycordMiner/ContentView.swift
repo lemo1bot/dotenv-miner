@@ -1427,11 +1427,10 @@ struct WindowAccessor: NSViewRepresentable {
         let view = NSView()
         DispatchQueue.main.async {
             if let window = view.window {
-                window.styleMask.insert([.resizable, .miniaturizable, .closable, .titled, .fullScreen])
+                window.styleMask.insert([.resizable, .miniaturizable, .closable, .titled])
                 window.collectionBehavior.insert([.fullScreenPrimary, .fullScreenAllowsTiling])
                 window.minSize = NSSize(width: 640, height: 720)
                 window.maxSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
-                window.showsResizeIndicator = true
             }
         }
         return view
@@ -1439,4 +1438,5 @@ struct WindowAccessor: NSViewRepresentable {
 
     func updateNSView(_ nsView: NSView, context: Context) {}
 }
+
 
