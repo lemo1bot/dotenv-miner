@@ -1,6 +1,7 @@
 import Foundation
 import Security
 import CommonCrypto
+import CryptoKit
 
 // MARK: - Supported Coins
 
@@ -10,6 +11,8 @@ enum SupportedCoin: String, CaseIterable, Identifiable {
     case commonfoundry = "commonfoundry"
     case truenorth     = "truenorth"
     case pulsemining   = "pulsemining"
+    case blocknet      = "blocknet"
+    case parano1d      = "parano1d"
 
     var id: String { rawValue }
 
@@ -20,6 +23,8 @@ enum SupportedCoin: String, CaseIterable, Identifiable {
         case .commonfoundry: return "Common Foundry"
         case .truenorth:     return "TrueNorth"
         case .pulsemining:   return "Privacy Bank Chain"
+        case .blocknet:      return "Blocknet"
+        case .parano1d:      return "Parano1d"
         }
     }
 
@@ -30,6 +35,8 @@ enum SupportedCoin: String, CaseIterable, Identifiable {
         case .commonfoundry: return "CMFD"
         case .truenorth:     return "TNC"
         case .pulsemining:   return "PBC"
+        case .blocknet:      return "BNT"
+        case .parano1d:      return "NOID"
         }
     }
 
@@ -37,9 +44,11 @@ enum SupportedCoin: String, CaseIterable, Identifiable {
         switch self {
         case .zycord:        return "RandomX v2 (rx/2)"
         case .connectcoin:   return "Pay-to-Connect (rx/0)"
-        case .commonfoundry: return "Inference PoW (ForgeMatrix)"
+        case .commonfoundry: return "ForgeMatrix AI PoW"
         case .truenorth:     return "Bitcoin + RandomX (rx/0)"
         case .pulsemining:   return "Post-Quantum Privacy (rx/pbc)"
+        case .blocknet:      return "Argon2id PoW (Seine)"
+        case .parano1d:      return "Proof-Native L1 (Poseidon2b)"
         }
     }
 
@@ -47,9 +56,11 @@ enum SupportedCoin: String, CaseIterable, Identifiable {
         switch self {
         case .zycord:        return "rx/2"
         case .connectcoin:   return "rx/2"
-        case .commonfoundry: return "rx/0"
+        case .commonfoundry: return "forgematrix"
         case .truenorth:     return "rx/2"
         case .pulsemining:   return "rx/pbc"
+        case .blocknet:      return "argon2id"
+        case .parano1d:      return "poseidon2b"
         }
     }
 
@@ -57,9 +68,11 @@ enum SupportedCoin: String, CaseIterable, Identifiable {
         switch self {
         case .zycord:        return "zcd.ariabrain.com"
         case .connectcoin:   return "conn.ariabrain.com"
-        case .commonfoundry: return "pool.ariabrain.com"
+        case .commonfoundry: return "159.69.194.46"
         case .truenorth:     return "north.ariabrain.com"
         case .pulsemining:   return "pbc.ariabrain.com"
+        case .blocknet:      return "bntpool.com"
+        case .parano1d:      return "127.0.0.1"
         }
     }
 
@@ -67,9 +80,11 @@ enum SupportedCoin: String, CaseIterable, Identifiable {
         switch self {
         case .zycord:        return 3343
         case .connectcoin:   return 3345
-        case .commonfoundry: return 3344
+        case .commonfoundry: return 29445
         case .truenorth:     return 3348
         case .pulsemining:   return 3342
+        case .blocknet:      return 3333
+        case .parano1d:      return 9600
         }
     }
 
@@ -80,6 +95,8 @@ enum SupportedCoin: String, CaseIterable, Identifiable {
         case .commonfoundry: return 25.0
         case .truenorth:     return 10.0
         case .pulsemining:   return 6.0
+        case .blocknet:      return 467.6
+        case .parano1d:      return 16.0
         }
     }
 
@@ -90,6 +107,8 @@ enum SupportedCoin: String, CaseIterable, Identifiable {
         case .commonfoundry: return 60.0
         case .truenorth:     return 60.0
         case .pulsemining:   return 120.0
+        case .blocknet:      return 60.0
+        case .parano1d:      return 30.0
         }
     }
 
@@ -100,9 +119,10 @@ enum SupportedCoin: String, CaseIterable, Identifiable {
         case .commonfoundry: return "027fe1ebf286b8a862cb080c47d2bce0457b92c77b785812cabe88eb71ea4d44"
         case .truenorth:     return "north1zr93s8f2mkvkcmh32095f9c9j8s7qg73w2e6q5t5ru0g52swx9qg6sw4q"
         case .pulsemining:   return "Pbe9P2Av88QU32Z6Ni6ZwnU32Z6Ni6ZwnU32Z6Ni6ZwnU32hbJLkZd3WtbVzpRBUn5WtbVzpRBUn5WtbVzpRBUn52XzDqUJ7j"
+        case .blocknet:      return "SEiNEceuDyfEY3GKDQAYVuK6382K2Ln2gQSv83ySAFkKhraBxhHnTf2P6PsF8CXtreqywg4T1qwBAjQo3L2VYDYWtsbb9"
+        case .parano1d:      return "o11qyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqsgqunwr"
         }
     }
-
 
     var officialUrl: String {
         switch self {
@@ -111,6 +131,8 @@ enum SupportedCoin: String, CaseIterable, Identifiable {
         case .commonfoundry: return "https://commonfoundry.ai/"
         case .truenorth:     return "https://github.com/truenorth-project/truenorth"
         case .pulsemining:   return "https://github.com/PulseMining/pbc-chain"
+        case .blocknet:      return "https://bntpool.com/"
+        case .parano1d:      return "https://parano1d.org/"
         }
     }
 }
@@ -228,6 +250,34 @@ final class WalletGenerator {
                 privateKeyHex: privateKeyHex,
                 mnemonicPhrase: mnemonic,
                 addressTypeDescription: "CryptoNote 97-character Base58 mainnet address (starts with Pbc… or Pb…) with post-quantum protection.",
+                createdAt: now
+            )
+
+        case .blocknet:
+            // Blocknet uses 68-byte Base58 stealth address (spend pubkey + view pubkey + sha3-256 checksum)
+            let bntAddr = generateBlocknetAddress(entropy: entropyBytes)
+
+            return GeneratedWallet(
+                coin: coin,
+                publicAddress: bntAddr,
+                secondaryAddress: nil,
+                privateKeyHex: privateKeyHex,
+                mnemonicPhrase: mnemonic,
+                addressTypeDescription: "Canonical 68-byte Base58 stealth address (starts with S… or SEiNE…) for Blocknet (BNT).",
+                createdAt: now
+            )
+
+        case .parano1d:
+            // Parano1d uses 32-byte payload Bech32m address starting with o1...
+            let noidAddr = generateParano1dAddress(entropy: entropyBytes)
+
+            return GeneratedWallet(
+                coin: coin,
+                publicAddress: noidAddr,
+                secondaryAddress: nil,
+                privateKeyHex: privateKeyHex,
+                mnemonicPhrase: mnemonic,
+                addressTypeDescription: "Post-quantum Bech32m address (starts with o1…) derived from 256-bit master secret for Parano1d.",
                 createdAt: now
             )
         }
@@ -469,16 +519,145 @@ final class WalletGenerator {
     private func generatePBCAddress(entropy: [UInt8]) -> String {
         // Varint 3207 for PBC mainnet prefix
         let prefix: [UInt8] = [0x87, 0x19]
-        // Derive spend and view public keys (32 bytes each)
-        var spend = [UInt8](repeating: 0, count: 32)
-        var view = [UInt8](repeating: 0, count: 32)
-        for i in 0..<32 {
-            spend[i] = entropy[i % entropy.count] ^ UInt8((i * 13 + 7) & 0xFF)
-            view[i]  = entropy[(i + 16) % entropy.count] ^ UInt8((i * 17 + 31) & 0xFF)
-        }
+        // Derive cryptographically valid Ed25519 spend and view public keys
+        let spendPriv = try? Curve25519.Signing.PrivateKey(rawRepresentation: Array(entropy[0..<32]))
+        let viewEntropy = Array(entropy[16..<32] + entropy[0..<16])
+        let viewPriv = try? Curve25519.Signing.PrivateKey(rawRepresentation: viewEntropy)
+        let spend = Array((spendPriv ?? Curve25519.Signing.PrivateKey()).publicKey.rawRepresentation)
+        let view = Array((viewPriv ?? Curve25519.Signing.PrivateKey()).publicKey.rawRepresentation)
+
         let payload = prefix + spend + view
         let chk = Array(keccak256(payload)[0..<4])
         return cnBase58Encode(payload + chk)
+    }
+
+    private func generateBlocknetAddress(entropy: [UInt8]) -> String {
+        let spendPriv = try? Curve25519.Signing.PrivateKey(rawRepresentation: Array(entropy[0..<32]))
+        let viewEntropy = Array(entropy[16..<32] + entropy[0..<16])
+        let viewPriv = try? Curve25519.Signing.PrivateKey(rawRepresentation: viewEntropy)
+        let spend = Array((spendPriv ?? Curve25519.Signing.PrivateKey()).publicKey.rawRepresentation)
+        let view = Array((viewPriv ?? Curve25519.Signing.PrivateKey()).publicKey.rawRepresentation)
+
+        let payload = spend + view
+        let tag = Array("blocknet_stealth_address_checksum".utf8)
+        let net = Array("blocknet_mainnet".utf8)
+        let fullHash = sha3_256(tag + net + payload)
+        let checksum = Array(fullHash[0..<4])
+        return base58Encode(payload + checksum)
+    }
+
+    private func generateParano1dAddress(entropy: [UInt8]) -> String {
+        let words = convertBits(data: Array(entropy[0..<32]), fromBits: 8, toBits: 5, pad: true)
+        let checksum = bech32CreateChecksum(hrp: "o1", values: words, isBech32m: true)
+        let charset = "qpzry9x8gf2tvdw0s3jn54khce6mua7l"
+        var res = "o11"
+        for v in words + checksum {
+            let idx = charset.index(charset.startIndex, offsetBy: Int(v))
+            res.append(charset[idx])
+        }
+        return res
+    }
+
+    private func base58Encode(_ bytes: [UInt8]) -> String {
+        let alphabet = Array("123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz")
+        var zeros = 0
+        while zeros < bytes.count && bytes[zeros] == 0 {
+            zeros += 1
+        }
+        let size = bytes.count * 138 / 100 + 1
+        var b58 = [UInt8](repeating: 0, count: size)
+        for byte in bytes {
+            var carry = Int(byte)
+            var i = 0
+            for j in (0..<size).reversed() {
+                if carry == 0 && i >= size - 1 { break }
+                carry += 256 * Int(b58[j])
+                b58[j] = UInt8(carry % 58)
+                carry /= 58
+                i += 1
+            }
+        }
+        var str = ""
+        for _ in 0..<zeros {
+            str.append("1")
+        }
+        var leadingZeros = true
+        for digit in b58 {
+            if leadingZeros && digit == 0 { continue }
+            leadingZeros = false
+            str.append(alphabet[Int(digit)])
+        }
+        return str
+    }
+
+    private func sha3_256(_ data: [UInt8]) -> [UInt8] {
+        let RC: [UInt64] = [
+            0x0000000000000001, 0x0000000000008082, 0x800000000000808A, 0x8000000080008000,
+            0x000000000000808B, 0x0000000080000001, 0x8000000080008081, 0x8000000000008009,
+            0x000000000000008A, 0x0000000000000088, 0x0000000080008009, 0x000000008000000A,
+            0x000000008000808B, 0x800000000000008B, 0x8000000000008089, 0x8000000000008003,
+            0x8000000000008002, 0x8000000000000080, 0x000000000000800A, 0x800000008000000A,
+            0x8000000080008081, 0x8000000000008080, 0x0000000080000001, 0x8000000080008008
+        ]
+        let r = 136
+        var state = [UInt64](repeating: 0, count: 25)
+        var padded = data
+        padded.append(0x06)
+        while padded.count % r != (r - 1) {
+            padded.append(0x00)
+        }
+        padded.append(0x80)
+
+        for b in stride(from: 0, to: padded.count, by: r) {
+            for i in 0..<17 {
+                var val: UInt64 = 0
+                for j in 0..<8 {
+                    val |= UInt64(padded[b + i * 8 + j]) << (j * 8)
+                }
+                state[i] ^= val
+            }
+            for roundIdx in 0..<24 {
+                var C = [UInt64](repeating: 0, count: 5)
+                for x in 0..<5 {
+                    C[x] = state[x] ^ state[x+5] ^ state[x+10] ^ state[x+15] ^ state[x+20]
+                }
+                var D = [UInt64](repeating: 0, count: 5)
+                for x in 0..<5 {
+                    let rot = (C[(x+1)%5] << 1) | (C[(x+1)%5] >> 63)
+                    D[x] = C[(x+4)%5] ^ rot
+                }
+                for x in 0..<5 {
+                    for y in 0..<5 {
+                        state[x + 5*y] ^= D[x]
+                    }
+                }
+                var x = 1, y = 0
+                var cur = state[1]
+                for t in 0..<24 {
+                    let X = y, Y = (2*x + 3*y) % 5
+                    let rot = ((t+1)*(t+2)/2) % 64
+                    let nxt = state[X + 5*Y]
+                    let rotVal = rot == 0 ? cur : ((cur << rot) | (cur >> (64 - rot)))
+                    state[X + 5*Y] = rotVal
+                    cur = nxt
+                    x = X; y = Y
+                }
+                for yr in 0..<5 {
+                    let row = [state[0 + 5*yr], state[1 + 5*yr], state[2 + 5*yr], state[3 + 5*yr], state[4 + 5*yr]]
+                    for xr in 0..<5 {
+                        state[xr + 5*yr] ^= (~row[(xr+1)%5]) & row[(xr+2)%5]
+                    }
+                }
+                state[0] ^= RC[roundIdx]
+            }
+        }
+        var out = [UInt8]()
+        for i in 0..<4 {
+            for j in 0..<8 {
+                out.append(UInt8((state[i] >> (j * 8)) & 0xFF))
+            }
+        }
+        return out
     }
 
 

@@ -71,8 +71,8 @@ final class SetupManager: ObservableObject {
 
     var xmrigPath: String {
         let candidates = [
-            Bundle.main.resourceURL?.appendingPathComponent("xmrig").path ?? "",
             Bundle.main.executableURL?.deletingLastPathComponent().appendingPathComponent("xmrig").path ?? "",
+            Bundle.main.resourceURL?.appendingPathComponent("xmrig").path ?? "",
             support.appendingPathComponent("bin/xmrig").path
         ]
         return candidates.first { FileManager.default.isExecutableFile(atPath: $0) } ?? ""
@@ -80,18 +80,40 @@ final class SetupManager: ObservableObject {
 
     var pbcminerPath: String {
         let candidates = [
-            Bundle.main.resourceURL?.appendingPathComponent("pbcminer").path ?? "",
             Bundle.main.executableURL?.deletingLastPathComponent().appendingPathComponent("pbcminer").path ?? "",
-            support.appendingPathComponent("bin/pbcminer").path
+            Bundle.main.resourceURL?.appendingPathComponent("pbcminer").path ?? "",
+            support.appendingPathComponent("bin/pbcminer").path,
+            "/Users/lemon/.gemini/antigravity/scratch/ZycordMiner/pbcminer"
+        ]
+        return candidates.first { FileManager.default.isExecutableFile(atPath: $0) } ?? ""
+    }
+
+    var seinePath: String {
+        let candidates = [
+            Bundle.main.executableURL?.deletingLastPathComponent().appendingPathComponent("seine").path ?? "",
+            Bundle.main.resourceURL?.appendingPathComponent("seine").path ?? "",
+            support.appendingPathComponent("bin/seine").path,
+            "/Users/lemon/.gemini/antigravity/scratch/ZycordMiner/seine"
+        ]
+        return candidates.first { FileManager.default.isExecutableFile(atPath: $0) } ?? ""
+    }
+
+    var parano1dPath: String {
+        let candidates = [
+            Bundle.main.executableURL?.deletingLastPathComponent().appendingPathComponent("parano1d").path ?? "",
+            Bundle.main.resourceURL?.appendingPathComponent("parano1d").path ?? "",
+            support.appendingPathComponent("bin/parano1d").path,
+            "/Users/lemon/.gemini/antigravity/scratch/ZycordMiner/parano1d"
         ]
         return candidates.first { FileManager.default.isExecutableFile(atPath: $0) } ?? ""
     }
 
     var stratumBridgePath: String {
         let candidates = [
-            Bundle.main.resourceURL?.appendingPathComponent("stratum_bridge.py").path ?? "",
             Bundle.main.executableURL?.deletingLastPathComponent().appendingPathComponent("stratum_bridge.py").path ?? "",
-            support.appendingPathComponent("bin/stratum_bridge.py").path
+            Bundle.main.resourceURL?.appendingPathComponent("stratum_bridge.py").path ?? "",
+            support.appendingPathComponent("bin/stratum_bridge.py").path,
+            "/Users/lemon/.gemini/antigravity/scratch/ZycordMiner/stratum_bridge.py"
         ]
         return candidates.first { FileManager.default.fileExists(atPath: $0) } ?? ""
     }
@@ -100,7 +122,8 @@ final class SetupManager: ObservableObject {
         let candidates = [
             Bundle.main.resourceURL?.appendingPathComponent("zycordd-randomx").path ?? "",
             Bundle.main.executableURL?.deletingLastPathComponent().appendingPathComponent("zycordd-randomx").path ?? "",
-            support.appendingPathComponent("bin/zycordd-randomx").path
+            support.appendingPathComponent("bin/zycordd-randomx").path,
+            "/Users/lemon/.gemini/antigravity/scratch/ZycordMiner/zycordd-randomx"
         ]
         return candidates.first { FileManager.default.isExecutableFile(atPath: $0) } ?? ""
     }

@@ -179,6 +179,11 @@ class StratumBridge:
                     method = req.get("method")
 
                     if method == "login":
+                        # Wait up to 5 seconds for the first upstream job so XMRig doesn't fail with error code 3 (NO_JOB)
+                        wait_start = time.time()
+                        while not self.current_cn_job and self.running and (time.time() - wait_start < 5.0):
+                            time.sleep(0.05)
+
                         resp = {
                             "id": req_id,
                             "jsonrpc": "2.0",

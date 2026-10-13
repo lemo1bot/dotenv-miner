@@ -49,30 +49,16 @@ mkdir -p "$APP_BUNDLE/Contents/MacOS" "$APP_BUNDLE/Contents/Resources"
 cp "$BUILD_DIR/$BUNDLE_NAME" "$APP_BUNDLE/Contents/MacOS/$BUNDLE_NAME"
 chmod +x "$APP_BUNDLE/Contents/MacOS/$BUNDLE_NAME"
 
-if [[ -f "$PROJECT_DIR/xmrig" ]]; then
-    cp "$PROJECT_DIR/xmrig" "$APP_BUNDLE/Contents/MacOS/xmrig"
-    chmod +x "$APP_BUNDLE/Contents/MacOS/xmrig"
-    cp "$PROJECT_DIR/xmrig" "$APP_BUNDLE/Contents/Resources/xmrig"
-    chmod +x "$APP_BUNDLE/Contents/Resources/xmrig"
-    codesign -s - --force "$APP_BUNDLE/Contents/MacOS/xmrig"
-    codesign -s - --force "$APP_BUNDLE/Contents/Resources/xmrig"
-fi
-
-if [[ -f "$PROJECT_DIR/pbcminer" ]]; then
-    cp "$PROJECT_DIR/pbcminer" "$APP_BUNDLE/Contents/MacOS/pbcminer"
-    chmod +x "$APP_BUNDLE/Contents/MacOS/pbcminer"
-    cp "$PROJECT_DIR/pbcminer" "$APP_BUNDLE/Contents/Resources/pbcminer"
-    chmod +x "$APP_BUNDLE/Contents/Resources/pbcminer"
-    codesign -s - --force "$APP_BUNDLE/Contents/MacOS/pbcminer"
-    codesign -s - --force "$APP_BUNDLE/Contents/Resources/pbcminer"
-fi
-
-if [[ -f "$PROJECT_DIR/stratum_bridge.py" ]]; then
-    cp "$PROJECT_DIR/stratum_bridge.py" "$APP_BUNDLE/Contents/MacOS/stratum_bridge.py"
-    chmod +x "$APP_BUNDLE/Contents/MacOS/stratum_bridge.py"
-    cp "$PROJECT_DIR/stratum_bridge.py" "$APP_BUNDLE/Contents/Resources/stratum_bridge.py"
-    chmod +x "$APP_BUNDLE/Contents/Resources/stratum_bridge.py"
-fi
+for bin in xmrig pbcminer seine parano1d stratum_bridge.py; do
+    if [[ -f "$PROJECT_DIR/$bin" ]]; then
+        cp "$PROJECT_DIR/$bin" "$APP_BUNDLE/Contents/MacOS/$bin"
+        chmod +x "$APP_BUNDLE/Contents/MacOS/$bin"
+        ln -sf "../MacOS/$bin" "$APP_BUNDLE/Contents/Resources/$bin"
+        if [[ "$bin" != *.py ]]; then
+            codesign -s - --force "$APP_BUNDLE/Contents/MacOS/$bin"
+        fi
+    fi
+done
 
 
 cp "$PROJECT_DIR/AppIcon.icns" "$APP_BUNDLE/Contents/Resources/AppIcon.icns"

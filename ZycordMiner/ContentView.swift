@@ -151,8 +151,8 @@ struct ContentView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .frame(minWidth: 640, idealWidth: 860, maxWidth: .infinity,
-               minHeight: 720, idealHeight: 960, maxHeight: .infinity)
+        .frame(minWidth: 580, idealWidth: 860, maxWidth: .infinity,
+               minHeight: 480, idealHeight: 780, maxHeight: .infinity)
         .background(WindowAccessor())
         .background(Color(nsColor: .windowBackgroundColor))
         .onAppear {
@@ -352,6 +352,8 @@ struct ContentView: View {
         case .commonfoundry: return "⚙️"
         case .truenorth:     return "🧭"
         case .pulsemining:   return "🏦"
+        case .blocknet:      return "📦"
+        case .parano1d:      return "👁️"
         }
     }
 
@@ -1315,7 +1317,10 @@ struct ContentView: View {
                 customPort: Int(ui.customPort) ?? ui.selectedCoin.defaultPort,
                 customAlgo: ui.customAlgo.isEmpty ? ui.selectedCoin.defaultAlgo : ui.customAlgo,
                 workerName: ui.workerName,
-                xmrigPath: setup.xmrigPath
+                xmrigPath: setup.xmrigPath,
+                pbcminerPath: setup.pbcminerPath,
+                seinePath: setup.seinePath,
+                parano1dPath: setup.parano1dPath
             )
         case .solo:
             miner.startSolo(
@@ -1366,6 +1371,18 @@ struct ContentView: View {
             }
             if s.count < 60 { return "PBC address looks too short (expected ~97 chars)" }
             return ""
+        case .blocknet:
+            if !s.hasPrefix("S") && !s.hasPrefix("N") && !s.hasPrefix("B") {
+                return "Blocknet address should start with S… or N…"
+            }
+            if s.count < 60 { return "Blocknet address looks too short" }
+            return ""
+        case .parano1d:
+            if !s.lowercased().hasPrefix("o1") {
+                return "Parano1d address must start with o1…"
+            }
+            if s.count < 30 { return "Parano1d address looks too short" }
+            return ""
         }
     }
 
@@ -1376,6 +1393,8 @@ struct ContentView: View {
         case .commonfoundry: return "028a… (64 hex characters)"
         case .truenorth:     return "north1z… (TrueNorth Bech32m address)"
         case .pulsemining:   return "Pbc… (97-character CryptoNote Base58 address)"
+        case .blocknet:      return "SEiNE… or S… (68-byte Base58 stealth address)"
+        case .parano1d:      return "o11q… (Bech32m address starting with o1)"
         }
     }
 
@@ -1386,6 +1405,8 @@ struct ContentView: View {
         case .commonfoundry: return "Mainnet 64-hexadecimal inference mining address"
         case .truenorth:     return "Native SegWit Bech32m address (starts with north1z…)"
         case .pulsemining:   return "CryptoNote private banking address (starts with Pbc…)"
+        case .blocknet:      return "Blocknet stealth address (starts with S… or SEiNE…)"
+        case .parano1d:      return "Proof-native Bech32m address (starts with o1…)"
         }
     }
 
@@ -1429,7 +1450,7 @@ struct WindowAccessor: NSViewRepresentable {
             if let window = view.window {
                 window.styleMask.insert([.resizable, .miniaturizable, .closable, .titled])
                 window.collectionBehavior.insert([.fullScreenPrimary, .fullScreenAllowsTiling])
-                window.minSize = NSSize(width: 640, height: 720)
+                window.minSize = NSSize(width: 580, height: 480)
                 window.maxSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
             }
         }

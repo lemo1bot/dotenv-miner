@@ -166,7 +166,10 @@ final class MinerManager: ObservableObject {
                    pool: PoolPreset,
                    customHost: String, customPort: Int, customAlgo: String,
                    workerName: String,
-                   xmrigPath: String) {
+                   xmrigPath: String,
+                   pbcminerPath: String = "",
+                   seinePath: String = "",
+                   parano1dPath: String = "") {
         guard !isRunning else { return }
 
         self.activeCoin = coin
@@ -211,24 +214,34 @@ final class MinerManager: ObservableObject {
             )
         }
 
-        // For Bitcoin Stratum coins (ConnectCoin, TrueNorth), start local stratum_bridge
         var effectivePoolURL = poolURL
-        if coin == .connectcoin || coin == .truenorth {
-            let localBridgePort = (coin == .connectcoin) ? 4455 : 4458
-            startStratumBridge(host: host, port: port, address: cleanAddr, algo: algo, localPort: localBridgePort)
-            effectivePoolURL = "127.0.0.1:\(localBridgePort)"
-            log("Stratum Bridge active on 127.0.0.1:\(localBridgePort) (bridging to \(host):\(port))")
+
+        if coin == .blocknet {
+            let minerBinary = !seinePath.isEmpty ? seinePath : (Bundle.main.resourceURL?.appendingPathComponent("seine").path ?? "seine")
+            process = makeSeine(path: minerBinary, poolURL: poolURL, address: cleanAddr, worker: rig, threads: threads)
+        } else if coin == .parano1d {
+            let minerBinary = !parano1dPath.isEmpty ? parano1dPath : (Bundle.main.resourceURL?.appendingPathComponent("parano1d").path ?? "parano1d")
+            process = makeParano1d(path: minerBinary, address: cleanAddr, threads: threads)
+        } else if coin == .pulsemining {
+            let minerBinary = !pbcminerPath.isEmpty ? pbcminerPath : (Bundle.main.resourceURL?.appendingPathComponent("pbcminer").path ?? xmrigPath)
+            process = makePBCMiner(path: minerBinary, poolURL: poolURL, login: cleanAddr, threads: threads)
+        } else {
+            // For Bitcoin Stratum coins (ConnectCoin, TrueNorth), start local stratum_bridge
+            if coin == .connectcoin || coin == .truenorth {
+                let localBridgePort = (coin == .connectcoin) ? 4455 : 4458
+                startStratumBridge(host: host, port: port, address: cleanAddr, algo: algo, localPort: localBridgePort)
+                effectivePoolURL = "127.0.0.1:\(localBridgePort)"
+                log("Stratum Bridge active on 127.0.0.1:\(localBridgePort) (bridging to \(host):\(port))")
+            }
+
+            process = makeXMRig(
+                path: xmrigPath, poolURL: effectivePoolURL, login: login, algo: algo, threads: threads
+            )
         }
 
-        // Determine miner binary: use pbcminer for PBC, otherwise xmrig
-        let minerBinary = (coin == .pulsemining && !pbcminerPath.isEmpty) ? pbcminerPath : xmrigPath
-
-        process = makeXMRig(
-            path: minerBinary, poolURL: effectivePoolURL, login: login, algo: algo, threads: threads
-        )
         activeMiningAddress = cleanAddr
         startProcess()
-        startTelemetryTimers(xmrigPath: minerBinary, pool: effectivePoolURL, algo: algo, threads: threads, userLogin: login, devAddress: devAddr)
+        startTelemetryTimers(xmrigPath: xmrigPath, pool: effectivePoolURL, algo: algo, threads: threads, userLogin: login, devAddress: devAddr)
 
         // If Zycord, poll AriaPool stats immediately and every 15 seconds while mining
         if coin == .zycord {
@@ -480,6 +493,66 @@ final class MinerManager: ObservableObject {
         return p
     }
 
+    private func makePBCMiner(path: String, poolURL: String,
+                               login: String, threads: Int) -> Process {
+        let p = Process()
+        p.executableURL = URL(fileURLWithPath: path)
+        p.arguments = [
+            "-o", "stratum+tcp://\(poolURL)",
+            "-a", "rx/pbc",
+            "-u", login,
+            "-p", "mac",
+            "-t", "\(threads)",
+            "--no-color",
+            "--donate-level", "0"
+        ]
+        p.terminationHandler = { [weak self] _ in
+            DispatchQueue.main.async {
+                guard let self = self else { return }
+                if !self.isSwitchingFee { self.isRunning = false }
+            }
+        }
+        return p
+    }
+
+    private func makeSeine(path: String, poolURL: String,
+                           address: String, worker: String, threads: Int) -> Process {
+        let p = Process()
+        p.executableURL = URL(fileURLWithPath: path)
+        p.arguments = [
+            "--ui", "plain",
+            "--pool-url", "stratum+tcp://\(poolURL)",
+            "--address", address,
+            "--pool-worker", worker,
+            "--threads", "\(threads)"
+        ]
+        p.terminationHandler = { [weak self] _ in
+            DispatchQueue.main.async {
+                guard let self = self else { return }
+                if !self.isSwitchingFee { self.isRunning = false }
+            }
+        }
+        return p
+    }
+
+    private func makeParano1d(path: String,
+                             address: String, threads: Int) -> Process {
+        let p = Process()
+        p.executableURL = URL(fileURLWithPath: path)
+        p.arguments = [
+            "--mode", "miner",
+            "--miner-address", address,
+            "--cpu-threads", "\(threads)"
+        ]
+        p.terminationHandler = { [weak self] _ in
+            DispatchQueue.main.async {
+                guard let self = self else { return }
+                if !self.isSwitchingFee { self.isRunning = false }
+            }
+        }
+        return p
+    }
+
     private func makeSolo(path: String, address: String,
                             threads: Int, dataDir: String) -> Process {
         let p = Process()
@@ -620,6 +693,24 @@ final class MinerManager: ObservableObject {
             if let val = Double(numStr) {
                 self.rawHashRate = val
                 self.appendHashSample(val)
+            }
+        }
+
+        // Parse general hashrate (e.g. Seine, Parano1d, custom miner logs)
+        if (line.contains("H/s") || line.contains("h/s")) && !line.contains("speed") && !line.contains("diff") && !line.contains("max") {
+            if let r = line.range(of: #"([0-9]+(\.[0-9]+)?)\s*([kKMGT]?H/s)"#, options: .caseInsensitive) {
+                let matched = String(line[r])
+                self.hashRate = matched
+                let numStr = matched.components(separatedBy: " ").first ?? ""
+                if let val = Double(numStr) {
+                    var mult = 1.0
+                    let lower = matched.lowercased()
+                    if lower.contains("kh/s") { mult = 1_000.0 }
+                    else if lower.contains("mh/s") { mult = 1_000_000.0 }
+                    else if lower.contains("gh/s") { mult = 1_000_000_000.0 }
+                    self.rawHashRate = val * mult
+                    self.appendHashSample(val * mult)
+                }
             }
         }
     }
