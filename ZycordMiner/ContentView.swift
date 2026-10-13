@@ -226,7 +226,7 @@ struct ContentView: View {
     private var coinSelectorBar: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Text("SELECT MINING COIN")
+                Text("SELECT MINING COIN / TOKEN")
                     .font(.system(size: 10, weight: .bold, design: .monospaced))
                     .foregroundStyle(.secondary)
                 Spacer()
@@ -235,49 +235,115 @@ struct ContentView: View {
                     .foregroundStyle(Color.green)
             }
 
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
-                    ForEach(SupportedCoin.allCases) { coin in
-                        let isSelected = ui.selectedCoin == coin
-                        Button {
-                            guard !miner.isRunning else { return }
-                            ui.selectedCoin = coin
-                        } label: {
-                            HStack(spacing: 8) {
-                                Text(coinIcon(for: coin))
-                                    .font(.system(size: 16))
-                                VStack(alignment: .leading, spacing: 1) {
-                                    HStack(spacing: 4) {
-                                        Text(coin.name)
-                                            .font(.system(size: 12, weight: .bold))
-                                        Text("(\(coin.symbol))")
-                                            .font(.system(size: 10, weight: .bold, design: .monospaced))
-                                            .foregroundStyle(isSelected ? Color.green : .secondary)
-                                    }
-                                    Text(coin.tag)
-                                        .font(.system(size: 9, design: .monospaced))
-                                        .foregroundStyle(isSelected ? Color.green.opacity(0.9) : .secondary)
-                                }
+            ScrollViewReader { scrollProxy in
+                HStack(spacing: 6) {
+                    // Left Scroll Option
+                    Button {
+                        withAnimation(.easeInOut) {
+                            if let prev = previousCoin(before: ui.selectedCoin) {
+                                scrollProxy.scrollTo(prev.id, anchor: .center)
+                                if !miner.isRunning { ui.selectedCoin = prev }
                             }
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 8)
-                            .background(
-                                isSelected ? Color.green.opacity(0.15) : Color.white.opacity(0.04),
-                                in: RoundedRectangle(cornerRadius: 8)
-                            )
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 8)
-                                    .strokeBorder(isSelected ? Color.green : Color.white.opacity(0.1), lineWidth: isSelected ? 1.5 : 1)
-                            )
                         }
-                        .buttonStyle(.plain)
-                        .disabled(miner.isRunning)
+                    } label: {
+                        Image(systemName: "chevron.left")
+                            .font(.system(size: 12, weight: .bold))
+                            .foregroundStyle(Color.green)
+                            .frame(width: 26, height: 46)
+                            .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 6))
+                            .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(Color.white.opacity(0.12), lineWidth: 1))
+                    }
+                    .buttonStyle(.plain)
+                    .help("Scroll to previous token")
+
+                    ScrollView(.horizontal, showsIndicators: true) {
+                        HStack(spacing: 8) {
+                            ForEach(SupportedCoin.allCases) { coin in
+                                let isSelected = ui.selectedCoin == coin
+                                Button {
+                                    guard !miner.isRunning else { return }
+                                    ui.selectedCoin = coin
+                                    withAnimation(.easeInOut) {
+                                        scrollProxy.scrollTo(coin.id, anchor: .center)
+                                    }
+                                } label: {
+                                    HStack(spacing: 8) {
+                                        Text(coinIcon(for: coin))
+                                            .font(.system(size: 16))
+                                        VStack(alignment: .leading, spacing: 1) {
+                                            HStack(spacing: 4) {
+                                                Text(coin.name)
+                                                    .font(.system(size: 12, weight: .bold))
+                                                Text("(\(coin.symbol))")
+                                                    .font(.system(size: 10, weight: .bold, design: .monospaced))
+                                                    .foregroundStyle(isSelected ? Color.green : .secondary)
+                                            }
+                                            Text(coin.tag)
+                                                .font(.system(size: 9, design: .monospaced))
+                                                .foregroundStyle(isSelected ? Color.green.opacity(0.9) : .secondary)
+                                        }
+                                    }
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 8)
+                                    .background(
+                                        isSelected ? Color.green.opacity(0.15) : Color.white.opacity(0.04),
+                                        in: RoundedRectangle(cornerRadius: 8)
+                                    )
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 8)
+                                            .strokeBorder(isSelected ? Color.green : Color.white.opacity(0.1), lineWidth: isSelected ? 1.5 : 1)
+                                    )
+                                }
+                                .buttonStyle(.plain)
+                                .disabled(miner.isRunning)
+                                .id(coin.id)
+                            }
+                        }
+                        .padding(.vertical, 4)
+                    }
+
+                    // Right Scroll Option
+                    Button {
+                        withAnimation(.easeInOut) {
+                            if let next = nextCoin(after: ui.selectedCoin) {
+                                scrollProxy.scrollTo(next.id, anchor: .center)
+                                if !miner.isRunning { ui.selectedCoin = next }
+                            }
+                        }
+                    } label: {
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 12, weight: .bold))
+                            .foregroundStyle(Color.green)
+                            .frame(width: 26, height: 46)
+                            .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 6))
+                            .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(Color.white.opacity(0.12), lineWidth: 1))
+                    }
+                    .buttonStyle(.plain)
+                    .help("Scroll to next token")
+                }
+                .onChange(of: ui.selectedCoin) { newCoin in
+                    withAnimation(.easeInOut) {
+                        scrollProxy.scrollTo(newCoin.id, anchor: .center)
                     }
                 }
-                .padding(.vertical, 2)
             }
         }
     }
+
+    private func previousCoin(before current: SupportedCoin) -> SupportedCoin? {
+        let all = SupportedCoin.allCases
+        guard let idx = all.firstIndex(of: current) else { return all.first }
+        if idx > 0 { return all[idx - 1] }
+        return all.last
+    }
+
+    private func nextCoin(after current: SupportedCoin) -> SupportedCoin? {
+        let all = SupportedCoin.allCases
+        guard let idx = all.firstIndex(of: current) else { return all.first }
+        if idx + 1 < all.count { return all[idx + 1] }
+        return all.first
+    }
+
 
     private func coinIcon(for coin: SupportedCoin) -> String {
         switch coin {
