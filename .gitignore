@@ -4,3 +4,5 @@ build/
 *.o
 DotEnv
 *.tar.gz
+pbcminer_v2/
+

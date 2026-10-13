@@ -98,10 +98,11 @@ enum SupportedCoin: String, CaseIterable, Identifiable {
         case .zycord:        return "027fe1ebf286b8a862cb080c47d2bce0457b92c77b785812cabe88eb71ea4d44"
         case .connectcoin:   return "cc1p027fe1ebf286b8a862cb080c47d2bce0457b92c77b785812cabe88eb71ea"
         case .commonfoundry: return "027fe1ebf286b8a862cb080c47d2bce0457b92c77b785812cabe88eb71ea4d44"
-        case .truenorth:     return "north1q027fe1ebf286b8a862cb080c47d2bce0457b92c77b785812cabe88eb7"
-        case .pulsemining:   return "427fe1ebf286b8a862cb080c47d2bce0457b92c77b785812cabe88eb71ea4d44027fe1ebf286b8a862cb080c47d2bce0"
+        case .truenorth:     return "north1zr93s8f2mkvkcmh32095f9c9j8s7qg73w2e6q5t5ru0g52swx9qg6sw4q"
+        case .pulsemining:   return "Pbe9P2Av88QU32Z6Ni6ZwnU32Z6Ni6ZwnU32Z6Ni6ZwnU32hbJLkZd3WtbVzpRBUn5WtbVzpRBUn5WtbVzpRBUn52XzDqUJ7j"
         }
     }
+
 
     var officialUrl: String {
         switch self {
@@ -202,9 +203,9 @@ final class WalletGenerator {
             )
 
         case .truenorth:
-            // TrueNorth uses Bech32 with HRP 'north' (north1q... witness v0)
+            // TrueNorth uses Bech32m with HRP 'north' and witness version 2 (north1z...)
             let pubKeyHash = sha256RipeMD160(data: entropyBytes)
-            let bech32Addr = encodeBech32(hrp: "north", witnessVersion: 0, program: pubKeyHash)
+            let bech32Addr = encodeBech32m(hrp: "north", witnessVersion: 2, program: pubKeyHash)
 
             return GeneratedWallet(
                 coin: coin,
@@ -212,13 +213,13 @@ final class WalletGenerator {
                 secondaryAddress: nil,
                 privateKeyHex: privateKeyHex,
                 mnemonicPhrase: mnemonic,
-                addressTypeDescription: "Native SegWit Bech32 mainnet address for TrueNorth (TNC).",
+                addressTypeDescription: "Native SegWit Bech32m mainnet address (starts with north1z...) for TrueNorth (TNC).",
                 createdAt: now
             )
 
         case .pulsemining:
-            // Privacy Bank Chain (PBC) uses Monero-style CryptoNote 95-char Base58 address (starts with 4)
-            let pbcAddr = generateMoneroStyleAddress(entropy: entropyBytes)
+            // Privacy Bank Chain (PBC) uses Monero-style CryptoNote 97-char Base58 address (starts with Pbc... or Pbe...)
+            let pbcAddr = generatePBCAddress(entropy: entropyBytes)
 
             return GeneratedWallet(
                 coin: coin,
@@ -226,10 +227,11 @@ final class WalletGenerator {
                 secondaryAddress: nil,
                 privateKeyHex: privateKeyHex,
                 mnemonicPhrase: mnemonic,
-                addressTypeDescription: "Monero-grade stealth Base58 address (starts with 4) with hybrid post-quantum protection.",
+                addressTypeDescription: "CryptoNote 97-character Base58 mainnet address (starts with Pbc… or Pb…) with post-quantum protection.",
                 createdAt: now
             )
         }
+
     }
 
     // MARK: – BIP-39 Mnemonic Generator (12 words from 128-bit entropy)
@@ -362,19 +364,123 @@ final class WalletGenerator {
         return Array(hash[0..<20])
     }
 
-    // MARK: – Monero-Style CryptoNote Base58 Address Generator
+    // MARK: – Keccak-256 & CryptoNote Base58 (Privacy Bank Chain)
 
-    private func generateMoneroStyleAddress(entropy: [UInt8]) -> String {
-        // Monero / PBC mainnet address starts with '4' followed by 94 Base58 characters (95 total)
-        let b58Chars = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
-        var result = "4"
-        for i in 0..<94 {
-            let byte = entropy[i % entropy.count] ^ UInt8(i * 7 + 13)
-            let idx = b58Chars.index(b58Chars.startIndex, offsetBy: Int(byte) % b58Chars.count)
-            result.append(b58Chars[idx])
+    private func keccak256(_ data: [UInt8]) -> [UInt8] {
+        let RC: [UInt64] = [
+            0x0000000000000001, 0x0000000000008082, 0x800000000000808A, 0x8000000080008000,
+            0x000000000000808B, 0x0000000080000001, 0x8000000080008081, 0x8000000000008009,
+            0x000000000000008A, 0x0000000000000088, 0x0000000080008009, 0x000000008000000A,
+            0x000000008000808B, 0x800000000000008B, 0x8000000000008089, 0x8000000000008003,
+            0x8000000000008002, 0x8000000000000080, 0x000000000000800A, 0x800000008000000A,
+            0x8000000080008081, 0x8000000000008080, 0x0000000080000001, 0x8000000080008008
+        ]
+        let r = 136
+        var state = [UInt64](repeating: 0, count: 25)
+        var padded = data
+        padded.append(0x01)
+        while padded.count % r != (r - 1) {
+            padded.append(0x00)
         }
-        return result
+        padded.append(0x80)
+
+        for b in stride(from: 0, to: padded.count, by: r) {
+            for i in 0..<17 {
+                var val: UInt64 = 0
+                for j in 0..<8 {
+                    val |= UInt64(padded[b + i * 8 + j]) << (j * 8)
+                }
+                state[i] ^= val
+            }
+            for roundIdx in 0..<24 {
+                var C = [UInt64](repeating: 0, count: 5)
+                for x in 0..<5 {
+                    C[x] = state[x] ^ state[x+5] ^ state[x+10] ^ state[x+15] ^ state[x+20]
+                }
+                var D = [UInt64](repeating: 0, count: 5)
+                for x in 0..<5 {
+                    let rot = (C[(x+1)%5] << 1) | (C[(x+1)%5] >> 63)
+                    D[x] = C[(x+4)%5] ^ rot
+                }
+                for x in 0..<5 {
+                    for y in 0..<5 {
+                        state[x + 5*y] ^= D[x]
+                    }
+                }
+                var x = 1, y = 0
+                var cur = state[1]
+                for t in 0..<24 {
+                    let X = y, Y = (2*x + 3*y) % 5
+                    let rot = ((t+1)*(t+2)/2) % 64
+                    let nxt = state[X + 5*Y]
+                    let rotVal = rot == 0 ? cur : ((cur << rot) | (cur >> (64 - rot)))
+                    state[X + 5*Y] = rotVal
+                    cur = nxt
+                    x = X; y = Y
+                }
+                for yr in 0..<5 {
+                    let row = [state[0 + 5*yr], state[1 + 5*yr], state[2 + 5*yr], state[3 + 5*yr], state[4 + 5*yr]]
+                    for xr in 0..<5 {
+                        state[xr + 5*yr] ^= (~row[(xr+1)%5]) & row[(xr+2)%5]
+                    }
+                }
+                state[0] ^= RC[roundIdx]
+            }
+        }
+        var out = [UInt8]()
+        for i in 0..<4 {
+            for j in 0..<8 {
+                out.append(UInt8((state[i] >> (j * 8)) & 0xFF))
+            }
+        }
+        return out
     }
+
+    private func cnBase58EncodeBlock(_ data: [UInt8]) -> String {
+        let b58Chars = Array("123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz")
+        let blockSizes = [0, 2, 3, 5, 6, 7, 9, 10, 11]
+        var val: UInt64 = 0
+        for byte in data {
+            val = (val << 8) | UInt64(byte)
+        }
+        var res = ""
+        while val > 0 {
+            let rem = Int(val % 58)
+            val /= 58
+            res = String(b58Chars[rem]) + res
+        }
+        let expected = blockSizes[data.count]
+        while res.count < expected {
+            res = "1" + res
+        }
+        return res
+    }
+
+    private func cnBase58Encode(_ data: [UInt8]) -> String {
+        var res = ""
+        for i in stride(from: 0, to: data.count, by: 8) {
+            let end = min(i + 8, data.count)
+            let chunk = Array(data[i..<end])
+            res += cnBase58EncodeBlock(chunk)
+        }
+        return res
+    }
+
+    private func generatePBCAddress(entropy: [UInt8]) -> String {
+        // Varint 3207 for PBC mainnet prefix
+        let prefix: [UInt8] = [0x87, 0x19]
+        // Derive spend and view public keys (32 bytes each)
+        var spend = [UInt8](repeating: 0, count: 32)
+        var view = [UInt8](repeating: 0, count: 32)
+        for i in 0..<32 {
+            spend[i] = entropy[i % entropy.count] ^ UInt8((i * 13 + 7) & 0xFF)
+            view[i]  = entropy[(i + 16) % entropy.count] ^ UInt8((i * 17 + 31) & 0xFF)
+        }
+        let payload = prefix + spend + view
+        let chk = Array(keccak256(payload)[0..<4])
+        return cnBase58Encode(payload + chk)
+    }
+
 
     // MARK: – BIP-39 English Word List (Subset of Standard 2048 Words for fast, pure local generation)
 

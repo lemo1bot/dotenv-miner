@@ -78,6 +78,24 @@ final class SetupManager: ObservableObject {
         return candidates.first { FileManager.default.isExecutableFile(atPath: $0) } ?? ""
     }
 
+    var pbcminerPath: String {
+        let candidates = [
+            Bundle.main.resourceURL?.appendingPathComponent("pbcminer").path ?? "",
+            Bundle.main.executableURL?.deletingLastPathComponent().appendingPathComponent("pbcminer").path ?? "",
+            support.appendingPathComponent("bin/pbcminer").path
+        ]
+        return candidates.first { FileManager.default.isExecutableFile(atPath: $0) } ?? ""
+    }
+
+    var stratumBridgePath: String {
+        let candidates = [
+            Bundle.main.resourceURL?.appendingPathComponent("stratum_bridge.py").path ?? "",
+            Bundle.main.executableURL?.deletingLastPathComponent().appendingPathComponent("stratum_bridge.py").path ?? "",
+            support.appendingPathComponent("bin/stratum_bridge.py").path
+        ]
+        return candidates.first { FileManager.default.fileExists(atPath: $0) } ?? ""
+    }
+
     var zycorddPath: String {
         let candidates = [
             Bundle.main.resourceURL?.appendingPathComponent("zycordd-randomx").path ?? "",
@@ -86,6 +104,7 @@ final class SetupManager: ObservableObject {
         ]
         return candidates.first { FileManager.default.isExecutableFile(atPath: $0) } ?? ""
     }
+
 
     private var support: URL {
         FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)

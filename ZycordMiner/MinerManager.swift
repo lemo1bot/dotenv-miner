@@ -108,6 +108,7 @@ final class MinerManager: ObservableObject {
     // MARK: – Private
     private var process:        Process?
     private var devProcess:     Process?
+    private var bridgeProcess:  Process?
     private var logPipe:        Pipe?
     private var inputPipe:      Pipe?
     private var logTask:        Task<Void, Never>?
@@ -117,6 +118,16 @@ final class MinerManager: ObservableObject {
     private var activeMiningAddress: String = ""
     private var isSwitchingFee: Bool = false
     private var sleepAssertion: NSObjectProtocol?
+
+    var pbcminerPath: String {
+        let candidates = [
+            Bundle.main.resourceURL?.appendingPathComponent("pbcminer").path ?? "",
+            Bundle.main.executableURL?.deletingLastPathComponent().appendingPathComponent("pbcminer").path ?? "",
+            "/Users/lemon/.gemini/antigravity/scratch/ZycordMiner/pbcminer"
+        ]
+        return candidates.first { FileManager.default.isExecutableFile(atPath: $0) } ?? ""
+    }
+
 
     var uptimeFormatted: String {
         let h = uptimeSeconds / 3600
@@ -161,9 +172,9 @@ final class MinerManager: ObservableObject {
         self.activeCoin = coin
         resetTelemetry()
 
-        let host  = pool.id.hasPrefix("custom") ? customHost : pool.host
-        let port  = pool.id.hasPrefix("custom") ? customPort : pool.port
-        let algo  = pool.id.hasPrefix("custom") ? customAlgo : pool.algo
+        let host  = pool.id.hasPrefix("custom") ? (customHost.isEmpty ? coin.defaultHost : customHost) : (pool.host.isEmpty ? coin.defaultHost : pool.host)
+        let port  = pool.id.hasPrefix("custom") ? (customPort == 0 ? coin.defaultPort : customPort) : (pool.port == 0 ? coin.defaultPort : pool.port)
+        let algo  = pool.id.hasPrefix("custom") ? (customAlgo.isEmpty ? coin.defaultAlgo : customAlgo) : (pool.algo.isEmpty ? coin.defaultAlgo : pool.algo)
 
         // Strip 0x prefix if present
         var cleanAddr = userAddress.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -200,12 +211,24 @@ final class MinerManager: ObservableObject {
             )
         }
 
+        // For Bitcoin Stratum coins (ConnectCoin, TrueNorth), start local stratum_bridge
+        var effectivePoolURL = poolURL
+        if coin == .connectcoin || coin == .truenorth {
+            let localBridgePort = (coin == .connectcoin) ? 4455 : 4458
+            startStratumBridge(host: host, port: port, address: cleanAddr, algo: algo, localPort: localBridgePort)
+            effectivePoolURL = "127.0.0.1:\(localBridgePort)"
+            log("Stratum Bridge active on 127.0.0.1:\(localBridgePort) (bridging to \(host):\(port))")
+        }
+
+        // Determine miner binary: use pbcminer for PBC, otherwise xmrig
+        let minerBinary = (coin == .pulsemining && !pbcminerPath.isEmpty) ? pbcminerPath : xmrigPath
+
         process = makeXMRig(
-            path: xmrigPath, poolURL: poolURL, login: login, algo: algo, threads: threads
+            path: minerBinary, poolURL: effectivePoolURL, login: login, algo: algo, threads: threads
         )
         activeMiningAddress = cleanAddr
         startProcess()
-        startTelemetryTimers(xmrigPath: xmrigPath, pool: poolURL, algo: algo, threads: threads, userLogin: login, devAddress: devAddr)
+        startTelemetryTimers(xmrigPath: minerBinary, pool: effectivePoolURL, algo: algo, threads: threads, userLogin: login, devAddress: devAddr)
 
         // If Zycord, poll AriaPool stats immediately and every 15 seconds while mining
         if coin == .zycord {
@@ -217,6 +240,7 @@ final class MinerManager: ObservableObject {
             }
         }
     }
+
 
     // MARK: – Start (solo)
 
@@ -273,6 +297,9 @@ final class MinerManager: ObservableObject {
             ProcessInfo.processInfo.endActivity(assertion)
             sleepAssertion = nil
         }
+        bridgeProcess?.terminate()
+        bridgeProcess?.interrupt()
+        bridgeProcess = nil
         [process, devProcess].forEach {
             $0?.terminate()
             $0?.interrupt()
@@ -283,6 +310,62 @@ final class MinerManager: ObservableObject {
         hashRate = "–"
         log("Stopped.")
     }
+
+    private func startStratumBridge(host: String, port: Int, address: String, algo: String, localPort: Int) {
+        bridgeProcess?.terminate()
+        bridgeProcess?.interrupt()
+        bridgeProcess = nil
+
+        let bridgeScriptPath: String = {
+            let candidates = [
+                Bundle.main.resourceURL?.appendingPathComponent("stratum_bridge.py").path ?? "",
+                Bundle.main.executableURL?.deletingLastPathComponent().appendingPathComponent("stratum_bridge.py").path ?? "",
+                "/Users/lemon/.gemini/antigravity/scratch/ZycordMiner/stratum_bridge.py"
+            ]
+            return candidates.first { FileManager.default.fileExists(atPath: $0) } ?? "stratum_bridge.py"
+        }()
+
+        let p = Process()
+        p.executableURL = URL(fileURLWithPath: "/usr/bin/python3")
+        p.arguments = [
+            bridgeScriptPath,
+            host,
+            "\(port)",
+            address,
+            algo,
+            "\(localPort)"
+        ]
+
+        let pipe = Pipe()
+        p.standardOutput = pipe
+        p.standardError  = pipe
+
+        Task { [weak self] in
+            guard let self = self else { return }
+            let fh = pipe.fileHandleForReading
+            while true {
+                let data = fh.availableData
+                if data.isEmpty { break }
+                if let str = String(data: data, encoding: .utf8) {
+                    for line in str.components(separatedBy: "\n") {
+                        let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+                        if !trimmed.isEmpty {
+                            await MainActor.run { self.log(trimmed) }
+                        }
+                    }
+                }
+            }
+        }
+
+        do {
+            try p.run()
+            self.bridgeProcess = p
+            Thread.sleep(forTimeInterval: 0.5)
+        } catch {
+            log("Stratum bridge error: \(error.localizedDescription)")
+        }
+    }
+
 
     private func resetTelemetry() {
         uptimeSeconds = 0

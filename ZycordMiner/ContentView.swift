@@ -1283,15 +1283,15 @@ struct ContentView: View {
             return ""
         case .truenorth:
             if !s.lowercased().hasPrefix("north1") && !s.hasPrefix("T") && !s.hasPrefix("1") {
-                return "TrueNorth address should start with north1… or T…"
+                return "TrueNorth address should start with north1z… (Bech32m)"
             }
             if s.count < 15 { return "Address looks too short" }
             return ""
         case .pulsemining:
-            if !s.hasPrefix("4") && !s.hasPrefix("8") {
-                return "PBC address must start with 4 (or 8 for subaddress)"
+            if !s.hasPrefix("Pb") && !s.hasPrefix("4") && !s.hasPrefix("8") {
+                return "PBC address must start with Pbc… (or Pb…)"
             }
-            if s.count < 60 { return "CryptoNote address looks too short (expected ~95 chars)" }
+            if s.count < 60 { return "PBC address looks too short (expected ~97 chars)" }
             return ""
         }
     }
@@ -1301,8 +1301,8 @@ struct ContentView: View {
         case .zycord:        return "027f… (64 hex characters, starts with 02)"
         case .connectcoin:   return "cc1p… (ConnectCoin Bech32m address)"
         case .commonfoundry: return "028a… (64 hex characters)"
-        case .truenorth:     return "north1q… (TrueNorth Bech32 address)"
-        case .pulsemining:   return "427f… (95-character CryptoNote address)"
+        case .truenorth:     return "north1z… (TrueNorth Bech32m address)"
+        case .pulsemining:   return "Pbc… (97-character CryptoNote Base58 address)"
         }
     }
 
@@ -1311,10 +1311,11 @@ struct ContentView: View {
         case .zycord:        return "Persistent Fix Address starts with 02 (required for mining rewards)"
         case .connectcoin:   return "Pay-to-Connect Bech32m witness-v1 mainnet address"
         case .commonfoundry: return "Mainnet 64-hexadecimal inference mining address"
-        case .truenorth:     return "Native SegWit Bech32 address (starts with north1…)"
-        case .pulsemining:   return "Monero-grade private banking address (starts with 4…)"
+        case .truenorth:     return "Native SegWit Bech32m address (starts with north1z…)"
+        case .pulsemining:   return "CryptoNote private banking address (starts with Pbc…)"
         }
     }
+
 
     private func logColor(for line: String) -> Color {
         if line.contains("ERROR") || line.contains("rejected") { return .red }

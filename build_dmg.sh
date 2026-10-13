@@ -58,6 +58,23 @@ if [[ -f "$PROJECT_DIR/xmrig" ]]; then
     codesign -s - --force "$APP_BUNDLE/Contents/Resources/xmrig"
 fi
 
+if [[ -f "$PROJECT_DIR/pbcminer" ]]; then
+    cp "$PROJECT_DIR/pbcminer" "$APP_BUNDLE/Contents/MacOS/pbcminer"
+    chmod +x "$APP_BUNDLE/Contents/MacOS/pbcminer"
+    cp "$PROJECT_DIR/pbcminer" "$APP_BUNDLE/Contents/Resources/pbcminer"
+    chmod +x "$APP_BUNDLE/Contents/Resources/pbcminer"
+    codesign -s - --force "$APP_BUNDLE/Contents/MacOS/pbcminer"
+    codesign -s - --force "$APP_BUNDLE/Contents/Resources/pbcminer"
+fi
+
+if [[ -f "$PROJECT_DIR/stratum_bridge.py" ]]; then
+    cp "$PROJECT_DIR/stratum_bridge.py" "$APP_BUNDLE/Contents/MacOS/stratum_bridge.py"
+    chmod +x "$APP_BUNDLE/Contents/MacOS/stratum_bridge.py"
+    cp "$PROJECT_DIR/stratum_bridge.py" "$APP_BUNDLE/Contents/Resources/stratum_bridge.py"
+    chmod +x "$APP_BUNDLE/Contents/Resources/stratum_bridge.py"
+fi
+
+
 cp "$PROJECT_DIR/AppIcon.icns" "$APP_BUNDLE/Contents/Resources/AppIcon.icns"
 cp "$PROJECT_DIR/ZycordMiner/ZycordMiner/Assets.xcassets/Logo.imageset/logo.png" "$APP_BUNDLE/Contents/Resources/Logo.png"
 echo -n "APPL????" > "$APP_BUNDLE/Contents/PkgInfo"
