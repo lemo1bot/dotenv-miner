@@ -108,7 +108,6 @@ final class MinerManager: ObservableObject {
     // MARK: – Private
     private var process:        Process?
     private var devProcess:     Process?
-    private var bridgeProcess:  Process?
     private var logPipe:        Pipe?
     private var inputPipe:      Pipe?
     private var logTask:        Task<Void, Never>?
@@ -118,15 +117,6 @@ final class MinerManager: ObservableObject {
     private var activeMiningAddress: String = ""
     private var isSwitchingFee: Bool = false
     private var sleepAssertion: NSObjectProtocol?
-
-    var pbcminerPath: String {
-        let candidates = [
-            Bundle.main.resourceURL?.appendingPathComponent("pbcminer").path ?? "",
-            Bundle.main.executableURL?.deletingLastPathComponent().appendingPathComponent("pbcminer").path ?? "",
-            "/Users/lemon/.gemini/antigravity/scratch/ZycordMiner/pbcminer"
-        ]
-        return candidates.first { FileManager.default.isExecutableFile(atPath: $0) } ?? ""
-    }
 
 
     var uptimeFormatted: String {
@@ -140,15 +130,7 @@ final class MinerManager: ObservableObject {
 
     /// Returns estimated network hashrate in H/s for realistic earnings estimation
     func networkHashRate(for coin: SupportedCoin) -> Double {
-        switch coin {
-        case .zycord:        return 4_600_000.0  // ~4.6 MH/s
-        case .connectcoin:   return 1_550_000.0  // ~1.55 MH/s
-        case .commonfoundry: return 2_000_000.0  // ~2.0 MH/s
-        case .truenorth:     return 3_800_000.0  // ~3.8 MH/s
-        case .pulsemining:   return 510_000.0    // ~510 kH/s
-        case .blocknet:      return 35_000.0     // ~35 kH/s (Argon2id CPU)
-        case .parano1d:      return 25_000.0     // ~25 kH/s (Poseidon2b L1)
-        }
+        return 4_600_000.0  // ~4.6 MH/s
     }
 
     func estimatedEarningsPerHour(coin: SupportedCoin) -> Double {
@@ -169,7 +151,7 @@ final class MinerManager: ObservableObject {
 
     // MARK: – Start (pool)
 
-    func startPool(coin: SupportedCoin,
+    func startPool(coin: SupportedCoin = .zycord,
                    userAddress: String,
                    pool: PoolPreset,
                    customHost: String, customPort: Int, customAlgo: String,
@@ -180,7 +162,7 @@ final class MinerManager: ObservableObject {
                    parano1dPath: String = "") {
         guard !isRunning else { return }
 
-        self.activeCoin = coin
+        self.activeCoin = .zycord
         resetTelemetry()
 
         let host  = pool.id.hasPrefix("custom") ? (customHost.isEmpty ? coin.defaultHost : customHost) : (pool.host.isEmpty ? coin.defaultHost : pool.host)
@@ -201,10 +183,10 @@ final class MinerManager: ObservableObject {
         let devAddr = coin.devPayoutAddress
 
         log("╔══════════════════════════════════════════════════════════╗")
-        log("║  .env One Click Miner  ·  \(coin.name) (\(coin.symbol))  ·  Pool ║")
+        log("║  .env One Click Miner  ·  Zycord (ZCD)  ·  Pool           ║")
         log("║  1 % developer fee — disclosed                           ║")
         log("╚══════════════════════════════════════════════════════════╝")
-        log("Coin    : \(coin.name) (\(coin.symbol))")
+        log("Coin    : Zycord (ZCD)")
         log("Pool    : \(poolURL)")
         log("Algo    : \(algo) (\(coin.tag))")
         log("Wallet  : \(cleanAddr)")
@@ -218,48 +200,24 @@ final class MinerManager: ObservableObject {
         if sleepAssertion == nil {
             sleepAssertion = ProcessInfo.processInfo.beginActivity(
                 options: [.userInitiated, .idleSystemSleepDisabled],
-                reason: "Mining \(coin.name) (\(coin.symbol))"
+                reason: "Mining Zycord (ZCD)"
             )
         }
 
-        var effectivePoolURL = poolURL
-
-        if coin == .blocknet {
-            let minerBinary = !seinePath.isEmpty ? seinePath : (Bundle.main.resourceURL?.appendingPathComponent("seine").path ?? "seine")
-            process = makeSeine(path: minerBinary, poolURL: poolURL, address: cleanAddr, worker: rig, threads: threads)
-        } else if coin == .parano1d {
-            let minerBinary = !parano1dPath.isEmpty ? parano1dPath : (Bundle.main.resourceURL?.appendingPathComponent("parano1d").path ?? "parano1d")
-            process = makeParano1d(path: minerBinary, address: cleanAddr, threads: threads)
-        } else if coin == .pulsemining {
-            let minerBinary = !pbcminerPath.isEmpty ? pbcminerPath : (Bundle.main.resourceURL?.appendingPathComponent("pbcminer").path ?? xmrigPath)
-            process = makePBCMiner(path: minerBinary, poolURL: poolURL, login: cleanAddr, threads: threads)
-        } else {
-            // For Bitcoin Stratum coins (ConnectCoin, TrueNorth), start local stratum_bridge
-            if coin == .connectcoin || coin == .truenorth {
-                let localBridgePort = (coin == .connectcoin) ? 4455 : 4458
-                startStratumBridge(host: host, port: port, address: cleanAddr, algo: algo, localPort: localBridgePort)
-                effectivePoolURL = "127.0.0.1:\(localBridgePort)"
-                log("Stratum Bridge active on 127.0.0.1:\(localBridgePort) (bridging to \(host):\(port))")
-            }
-
-            process = makeXMRig(
-                path: xmrigPath, poolURL: effectivePoolURL, login: login, algo: algo, threads: threads
-            )
-        }
+        process = makeXMRig(
+            path: xmrigPath, poolURL: poolURL, login: login, algo: algo, threads: threads
+        )
 
         activeMiningAddress = cleanAddr
         startProcess()
-        startTelemetryTimers(xmrigPath: xmrigPath, pool: effectivePoolURL, algo: algo, threads: threads, userLogin: login, devAddress: devAddr)
+        startTelemetryTimers(xmrigPath: xmrigPath, pool: poolURL, algo: algo, threads: threads, userLogin: login, devAddress: devAddr)
 
-        // Poll live pool stats for the active coin every 15 seconds
-        fetchPoolStats(coin: coin, address: cleanAddr)
+        // Poll live pool stats for Zycord every 15 seconds
+        fetchPoolStats(coin: .zycord, address: cleanAddr)
         poolTimer?.invalidate()
-        poolTimer = Timer.scheduledTimer(withTimeInterval: coin == .parano1d ? 4.0 : 15.0, repeats: true) { [weak self] _ in
+        poolTimer = Timer.scheduledTimer(withTimeInterval: 15.0, repeats: true) { [weak self] _ in
             guard let self = self, self.isRunning else { return }
-            if self.activeCoin == .parano1d {
-                self.pollParano1dRPC()
-            }
-            self.fetchPoolStats(coin: self.activeCoin, address: self.activeMiningAddress)
+            self.fetchPoolStats(coin: .zycord, address: self.activeMiningAddress)
         }
     }
 
@@ -319,9 +277,6 @@ final class MinerManager: ObservableObject {
             ProcessInfo.processInfo.endActivity(assertion)
             sleepAssertion = nil
         }
-        bridgeProcess?.terminate()
-        bridgeProcess?.interrupt()
-        bridgeProcess = nil
         [process, devProcess].forEach {
             $0?.terminate()
             $0?.interrupt()
@@ -331,61 +286,6 @@ final class MinerManager: ObservableObject {
         rawHashRate = 0.0
         hashRate = "–"
         log("Stopped.")
-    }
-
-    private func startStratumBridge(host: String, port: Int, address: String, algo: String, localPort: Int) {
-        bridgeProcess?.terminate()
-        bridgeProcess?.interrupt()
-        bridgeProcess = nil
-
-        let bridgeScriptPath: String = {
-            let candidates = [
-                Bundle.main.resourceURL?.appendingPathComponent("stratum_bridge.py").path ?? "",
-                Bundle.main.executableURL?.deletingLastPathComponent().appendingPathComponent("stratum_bridge.py").path ?? "",
-                "/Users/lemon/.gemini/antigravity/scratch/ZycordMiner/stratum_bridge.py"
-            ]
-            return candidates.first { FileManager.default.fileExists(atPath: $0) } ?? "stratum_bridge.py"
-        }()
-
-        let p = Process()
-        p.executableURL = URL(fileURLWithPath: "/usr/bin/python3")
-        p.arguments = [
-            bridgeScriptPath,
-            host,
-            "\(port)",
-            address,
-            algo,
-            "\(localPort)"
-        ]
-
-        let pipe = Pipe()
-        p.standardOutput = pipe
-        p.standardError  = pipe
-
-        Task { [weak self] in
-            guard let self = self else { return }
-            let fh = pipe.fileHandleForReading
-            while true {
-                let data = fh.availableData
-                if data.isEmpty { break }
-                if let str = String(data: data, encoding: .utf8) {
-                    for line in str.components(separatedBy: "\n") {
-                        let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
-                        if !trimmed.isEmpty {
-                            await MainActor.run { self.log(trimmed) }
-                        }
-                    }
-                }
-            }
-        }
-
-        do {
-            try p.run()
-            self.bridgeProcess = p
-            Thread.sleep(forTimeInterval: 0.5)
-        } catch {
-            log("Stratum bridge error: \(error.localizedDescription)")
-        }
     }
 
 
@@ -502,87 +402,7 @@ final class MinerManager: ObservableObject {
         return p
     }
 
-    private func makePBCMiner(path: String, poolURL: String,
-                               login: String, threads: Int) -> Process {
-        let p = Process()
-        p.executableURL = URL(fileURLWithPath: path)
-        let cleanPool = poolURL.replacingOccurrences(of: "stratum+tcp://", with: "").replacingOccurrences(of: "stratum+ssl://", with: "")
-        p.arguments = [
-            "-o", "stratum+tcp://\(cleanPool)",
-            "-a", "rx/pbc",
-            "-u", login,
-            "-p", "mac",
-            "-t", "\(threads)",
-            "--no-color",
-            "--donate-level", "0"
-        ]
-        p.terminationHandler = { [weak self] _ in
-            DispatchQueue.main.async {
-                guard let self = self else { return }
-                if !self.isSwitchingFee { self.isRunning = false }
-            }
-        }
-        return p
-    }
 
-    private func makeSeine(path: String, poolURL: String,
-                           address: String, worker: String, threads: Int) -> Process {
-        let p = Process()
-        p.executableURL = URL(fileURLWithPath: path)
-        let cleanPool = poolURL.replacingOccurrences(of: "stratum+tcp://", with: "").replacingOccurrences(of: "stratum+ssl://", with: "")
-        
-        // Ensure writable data directory for Seine configs and autotune to prevent Read-Only FS crash
-        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
-        let seineDataDir = appSupport.appendingPathComponent("DotEnvMiner/seine-data").path
-        try? FileManager.default.createDirectory(atPath: seineDataDir, withIntermediateDirectories: true)
-
-        // Seine Argon2id requires ~2.0 GB per CPU lane.
-        // Clamp configured threads to available memory headroom to prevent fatal memory limit exit
-        let totalRamBytes = ProcessInfo.processInfo.physicalMemory
-        let maxMemoryLanes = max(1, Int(totalRamBytes / (2 * 1024 * 1024 * 1024)) - 1)
-        let effectiveThreads = min(threads, maxMemoryLanes)
-
-        p.arguments = [
-            "--ui", "plain",
-            "--pool-url", cleanPool,
-            "--address", address,
-            "--pool-worker", worker,
-            "--threads", "\(effectiveThreads)",
-            "--data-dir", seineDataDir,
-            "--allow-oversubscribe"
-        ]
-        p.terminationHandler = { [weak self] _ in
-            DispatchQueue.main.async {
-                guard let self = self else { return }
-                if !self.isSwitchingFee { self.isRunning = false }
-            }
-        }
-        return p
-    }
-
-    private func makeParano1d(path: String,
-                             address: String, threads: Int) -> Process {
-        let p = Process()
-        p.executableURL = URL(fileURLWithPath: path)
-
-        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
-        let noidDataDir = appSupport.appendingPathComponent("DotEnvMiner/parano1d-data").path
-        try? FileManager.default.createDirectory(atPath: noidDataDir, withIntermediateDirectories: true)
-
-        p.arguments = [
-            "--mode", "miner",
-            "--miner-address", address,
-            "--cpu-threads", "\(threads)",
-            "--data-dir", noidDataDir
-        ]
-        p.terminationHandler = { [weak self] _ in
-            DispatchQueue.main.async {
-                guard let self = self else { return }
-                if !self.isSwitchingFee { self.isRunning = false }
-            }
-        }
-        return p
-    }
 
     private func makeSolo(path: String, address: String,
                             threads: Int, dataDir: String) -> Process {
@@ -644,19 +464,7 @@ final class MinerManager: ObservableObject {
             self.hashRate = "Dataset Ready · Mining…"
         }
 
-        // Parse Parano1d miner events
-        if line.contains("proof_ready=true") || line.contains("nonce_ready=true") || line.contains("synchronized chain view ready") {
-            self.hashRate = "Mining Active (Poseidon2b)"
-            self.rawHashRate = 120.0
-            self.appendHashSample(120.0)
-        }
-        if let r = line.range(of: #"height=([0-9]+)"#, options: .regularExpression) {
-            let h = String(line[r]).replacingOccurrences(of: "height=", with: "")
-            self.blockHeight = "#" + h
-        }
-        if line.contains("peer connected") || line.contains("authenticated_peers=") {
-            self.sharesOK += 1
-        }
+
 
         // Parse regular speed line: "speed 10s/60s/15m 1234.56 1234.56 1234.56 H/s max 1450.0 H/s"
         if line.contains("speed") && line.contains("H/s") {
@@ -797,90 +605,6 @@ final class MinerManager: ObservableObject {
                 return
             }
             pollAriaPoolStandard(url: url, coinSymbol: "ZCD", divisor: 100_000_000.0, timeStr: timeStr)
-
-        case .connectcoin:
-            guard let url = URL(string: "https://pool.ariabrain.com/conn-api/wallet/\(cleanAddr)") else {
-                DispatchQueue.main.async { self.isRefreshingPool = false }
-                return
-            }
-            pollAriaPoolStandard(url: url, coinSymbol: "XCC", divisor: 10_000_000_000.0, timeStr: timeStr)
-
-        case .truenorth:
-            guard let url = URL(string: "https://pool.ariabrain.com/north-api/wallet/\(cleanAddr)") else {
-                DispatchQueue.main.async { self.isRefreshingPool = false }
-                return
-            }
-            pollAriaPoolStandard(url: url, coinSymbol: "TNC", divisor: 100_000_000.0, timeStr: timeStr)
-
-        case .pulsemining:
-            guard let url = URL(string: "https://pool.ariabrain.com/pbc-api/miner/\(cleanAddr)") else {
-                DispatchQueue.main.async { self.isRefreshingPool = false }
-                return
-            }
-            var request = URLRequest(url: url)
-            request.timeoutInterval = 8.0
-            request.cachePolicy = .reloadIgnoringLocalCacheData
-
-            URLSession.shared.dataTask(with: request) { [weak self] data, _, _ in
-                guard let self = self else { return }
-                defer { DispatchQueue.main.async { self.isRefreshingPool = false } }
-                guard let data = data,
-                      let dict = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else { return }
-
-                let balDict = dict["balance"] as? [String: Any] ?? [:]
-                let rawBal = (balDict["due_atomic"] as? NSNumber)?.doubleValue ?? 0.0
-                let rawPaid = (balDict["paid_atomic"] as? NSNumber)?.doubleValue ?? 0.0
-                let shares = (dict["shares"] as? NSNumber)?.intValue ?? 0
-                let workers = (dict["workers"] as? [Any])?.count ?? 0
-                let hr = (dict["hashrate"] as? NSNumber)?.doubleValue ?? 0.0
-
-                let bal = rawBal / 1_000_000_000_000.0
-                let paid = rawPaid / 1_000_000_000_000.0
-
-                DispatchQueue.main.async {
-                    self.poolPendingBalance = String(format: "%.6f PBC", bal)
-                    self.poolImmatureBalance = "0.000000 PBC"
-                    self.poolTotalPaid = String(format: "%.6f PBC", paid)
-                    self.poolActiveWorkers = workers
-                    self.poolShares24h = shares
-                    self.poolHashRate = String(format: "%.1f H/s", hr)
-                    self.payoutProgress = min(1.0, max(0.0, bal / 1.0))
-                    self.lastPoolUpdate = timeStr
-                }
-            }.resume()
-
-        case .blocknet:
-            guard let url = URL(string: "https://bntpool.com/api/miner/\(cleanAddr)") else {
-                DispatchQueue.main.async { self.isRefreshingPool = false }
-                return
-            }
-            var request = URLRequest(url: url)
-            request.timeoutInterval = 8.0
-            request.cachePolicy = .reloadIgnoringLocalCacheData
-
-            URLSession.shared.dataTask(with: request) { [weak self] data, _, _ in
-                guard let self = self else { return }
-                defer { DispatchQueue.main.async { self.isRefreshingPool = false } }
-                guard let data = data,
-                      let dict = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else { return }
-
-                let hr = (dict["hashrate"] as? NSNumber)?.doubleValue ?? 0.0
-                let accepted = (dict["total_accepted"] as? NSNumber)?.intValue ?? 0
-                let workers = (dict["workers"] as? [Any])?.count ?? 0
-
-                DispatchQueue.main.async {
-                    self.poolActiveWorkers = workers
-                    self.poolShares24h = accepted
-                    self.poolHashRate = String(format: "%.1f H/s", hr)
-                    self.lastPoolUpdate = timeStr
-                }
-            }.resume()
-
-        case .parano1d, .commonfoundry:
-            DispatchQueue.main.async {
-                self.isRefreshingPool = false
-                self.lastPoolUpdate = timeStr
-            }
         }
     }
 
@@ -919,77 +643,6 @@ final class MinerManager: ObservableObject {
                 self.poolHashRate = String(format: "%.1f H/s", poolHr)
                 self.payoutProgress = progress
                 self.lastPoolUpdate = timeStr
-            }
-        }.resume()
-    }
-
-    // MARK: – Live Parano1d JSON-RPC Node & Mining Polling
-
-    func pollParano1dRPC() {
-        guard let url = URL(string: "http://127.0.0.1:9601") else { return }
-
-        // 1. Query Node Status
-        var req1 = URLRequest(url: url)
-        req1.httpMethod = "POST"
-        req1.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        req1.timeoutInterval = 2.5
-        let body1: [String: Any] = ["jsonrpc": "2.0", "method": "paranoid_getNodeStatus", "params": [] as [Any], "id": 1]
-        req1.httpBody = try? JSONSerialization.data(withJSONObject: body1)
-
-        URLSession.shared.dataTask(with: req1) { [weak self] data, _, _ in
-            guard let self = self, let data = data else { return }
-            if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-               let res = json["result"] as? [String: Any] {
-                DispatchQueue.main.async {
-                    let threads = res["worker_threads"] as? Int ?? self.userThreads
-                    let mining = res["mining"] as? Bool ?? false
-                    let miningReady = res["mining_ready"] as? Bool ?? false
-                    let synced = res["synced"] as? Bool ?? false
-                    if miningReady || mining {
-                        let pseudoRate = Double(threads * 35)
-                        self.hashRate = String(format: "%.1f H/s", pseudoRate)
-                        self.rawHashRate = pseudoRate
-                        self.appendHashSample(pseudoRate)
-                    } else if synced {
-                        self.hashRate = "Chain Synced · Preparing Proof…"
-                    } else {
-                        let stage = res["sync_stage"] as? String ?? "Syncing"
-                        if stage.lowercased() == "tip" {
-                            self.hashRate = "\(threads) Threads · Mining Tip"
-                            let pseudoRate = Double(threads * 35)
-                            self.rawHashRate = pseudoRate
-                            self.appendHashSample(pseudoRate)
-                        } else {
-                            self.hashRate = "Syncing \(stage.capitalized)…"
-                        }
-                    }
-                }
-            }
-        }.resume()
-
-        // 2. Query Mining Info (Block Height, Difficulty, Reward)
-        var req2 = URLRequest(url: url)
-        req2.httpMethod = "POST"
-        req2.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        req2.timeoutInterval = 2.5
-        let body2: [String: Any] = ["jsonrpc": "2.0", "method": "paranoid_getMiningInfo", "params": [] as [Any], "id": 2]
-        req2.httpBody = try? JSONSerialization.data(withJSONObject: body2)
-
-        URLSession.shared.dataTask(with: req2) { [weak self] data, _, _ in
-            guard let self = self, let data = data else { return }
-            if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-               let res = json["result"] as? [String: Any] {
-                DispatchQueue.main.async {
-                    if let h = res["height"] as? Int {
-                        self.blockHeight = "#\(h)"
-                    }
-                    if let bits = res["difficulty_bits"] as? Int {
-                        self.currentDifficulty = "\(bits) bits"
-                    }
-                    if let reward = res["block_reward_noid"] as? Double {
-                        self.currentJobHash = String(format: "%.4f NOID/block", reward)
-                    }
-                }
             }
         }.resume()
     }

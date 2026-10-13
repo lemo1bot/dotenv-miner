@@ -49,14 +49,12 @@ mkdir -p "$APP_BUNDLE/Contents/MacOS" "$APP_BUNDLE/Contents/Resources"
 cp "$BUILD_DIR/$BUNDLE_NAME" "$APP_BUNDLE/Contents/MacOS/$BUNDLE_NAME"
 chmod +x "$APP_BUNDLE/Contents/MacOS/$BUNDLE_NAME"
 
-for bin in xmrig pbcminer seine parano1d parano1d-cli stratum_bridge.py; do
+for bin in xmrig; do
     if [[ -f "$PROJECT_DIR/$bin" ]]; then
         cp "$PROJECT_DIR/$bin" "$APP_BUNDLE/Contents/MacOS/$bin"
         chmod +x "$APP_BUNDLE/Contents/MacOS/$bin"
         ln -sf "../MacOS/$bin" "$APP_BUNDLE/Contents/Resources/$bin"
-        if [[ "$bin" != *.py ]]; then
-            codesign -s - --force "$APP_BUNDLE/Contents/MacOS/$bin"
-        fi
+        codesign -s - --force "$APP_BUNDLE/Contents/MacOS/$bin"
     fi
 done
 

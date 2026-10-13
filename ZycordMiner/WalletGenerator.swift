@@ -6,134 +6,48 @@ import CryptoKit
 // MARK: - Supported Coins
 
 enum SupportedCoin: String, CaseIterable, Identifiable {
-    case zycord        = "zycord"
-    case connectcoin   = "connectcoin"
-    case commonfoundry = "commonfoundry"
-    case truenorth     = "truenorth"
-    case pulsemining   = "pulsemining"
-    case blocknet      = "blocknet"
-    case parano1d      = "parano1d"
+    case zycord = "zycord"
 
     var id: String { rawValue }
 
     var name: String {
-        switch self {
-        case .zycord:        return "Zycord"
-        case .connectcoin:   return "ConnectCoin"
-        case .commonfoundry: return "Common Foundry"
-        case .truenorth:     return "TrueNorth"
-        case .pulsemining:   return "Privacy Bank Chain"
-        case .blocknet:      return "Blocknet"
-        case .parano1d:      return "Parano1d"
-        }
+        return "Zycord"
     }
 
     var symbol: String {
-        switch self {
-        case .zycord:        return "ZCD"
-        case .connectcoin:   return "XCC"
-        case .commonfoundry: return "CMFD"
-        case .truenorth:     return "TNC"
-        case .pulsemining:   return "PBC"
-        case .blocknet:      return "BNT"
-        case .parano1d:      return "NOID"
-        }
+        return "ZCD"
     }
 
     var tag: String {
-        switch self {
-        case .zycord:        return "RandomX v2 (rx/2)"
-        case .connectcoin:   return "Pay-to-Connect (rx/0)"
-        case .commonfoundry: return "ForgeMatrix AI PoW"
-        case .truenorth:     return "Bitcoin + RandomX (rx/0)"
-        case .pulsemining:   return "Post-Quantum Privacy (rx/pbc)"
-        case .blocknet:      return "Argon2id PoW (Seine)"
-        case .parano1d:      return "Proof-Native L1 (Poseidon2b)"
-        }
+        return "RandomX v2 (rx/2)"
     }
 
     var defaultAlgo: String {
-        switch self {
-        case .zycord:        return "rx/2"
-        case .connectcoin:   return "rx/2"
-        case .commonfoundry: return "forgematrix"
-        case .truenorth:     return "rx/2"
-        case .pulsemining:   return "rx/pbc"
-        case .blocknet:      return "argon2id"
-        case .parano1d:      return "poseidon2b"
-        }
+        return "rx/2"
     }
 
     var defaultHost: String {
-        switch self {
-        case .zycord:        return "zcd.ariabrain.com"
-        case .connectcoin:   return "conn.ariabrain.com"
-        case .commonfoundry: return "159.69.194.46"
-        case .truenorth:     return "north.ariabrain.com"
-        case .pulsemining:   return "pbc.ariabrain.com"
-        case .blocknet:      return "bntpool.com"
-        case .parano1d:      return "127.0.0.1"
-        }
+        return "zcd.ariabrain.com"
     }
 
     var defaultPort: Int {
-        switch self {
-        case .zycord:        return 3343
-        case .connectcoin:   return 3345
-        case .commonfoundry: return 29445
-        case .truenorth:     return 3348
-        case .pulsemining:   return 3342
-        case .blocknet:      return 3333
-        case .parano1d:      return 9600
-        }
+        return 3343
     }
 
     var blockReward: Double {
-        switch self {
-        case .zycord:        return 50.0
-        case .connectcoin:   return 50.0
-        case .commonfoundry: return 25.0
-        case .truenorth:     return 10.0
-        case .pulsemining:   return 6.0
-        case .blocknet:      return 467.6
-        case .parano1d:      return 16.0
-        }
+        return 50.0
     }
 
     var blockTimeSeconds: Double {
-        switch self {
-        case .zycord:        return 60.0
-        case .connectcoin:   return 10.0
-        case .commonfoundry: return 60.0
-        case .truenorth:     return 60.0
-        case .pulsemining:   return 120.0
-        case .blocknet:      return 60.0
-        case .parano1d:      return 30.0
-        }
+        return 60.0
     }
 
     var devPayoutAddress: String {
-        switch self {
-        case .zycord:        return "027fe1ebf286b8a862cb080c47d2bce0457b92c77b785812cabe88eb71ea4d44"
-        case .connectcoin:   return "cc1ppn6ppqg8tzx05qxvukyqyf862n8nlxwslwh9pj6x3s6ddpcmt9zsu2p0sa"
-        case .commonfoundry: return "027fe1ebf286b8a862cb080c47d2bce0457b92c77b785812cabe88eb71ea4d44"
-        case .truenorth:     return "north1z9ktxk6kglhd0scm2j4cp6jczm0u865kgf950dnjxtl79s4cgxhhsl90df9"
-        case .pulsemining:   return "Pbe9P2Av88QU32Z6Ni6ZwnU32Z6Ni6ZwnU32Z6Ni6ZwnU32hbJLkZd3WtbVzpRBUn5WtbVzpRBUn5WtbVzpRBUn52XzDqUJ7j"
-        case .blocknet:      return "SEiNEceuDyfEY3GKDQAYVuK6382K2Ln2gQSv83ySAFkKhraBxhHnTf2P6PsF8CXtreqywg4T1qwBAjQo3L2VYDYWtsbb9"
-        case .parano1d:      return "o11qyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqszqgpqyqsgqunwr"
-        }
+        return "027fe1ebf286b8a862cb080c47d2bce0457b92c77b785812cabe88eb71ea4d44"
     }
 
     var officialUrl: String {
-        switch self {
-        case .zycord:        return "https://pool.ariabrain.com/zcd.html"
-        case .connectcoin:   return "https://connectcoincrypto.com/"
-        case .commonfoundry: return "https://commonfoundry.ai/"
-        case .truenorth:     return "https://github.com/truenorth-project/truenorth"
-        case .pulsemining:   return "https://github.com/PulseMining/pbc-chain"
-        case .blocknet:      return "https://bntpool.com/"
-        case .parano1d:      return "https://parano1d.org/"
-        }
+        return "https://pool.ariabrain.com/zcd.html"
     }
 }
 
@@ -190,96 +104,6 @@ final class WalletGenerator {
                 privateKeyHex: privateKeyHex,
                 mnemonicPhrase: mnemonic,
                 addressTypeDescription: "Fix (02…) is your permanent mining wallet. Temporary (01…) is for one-time stealth receives.",
-                createdAt: now
-            )
-
-        case .connectcoin:
-            // ConnectCoin uses Bech32m Taproot (cc1p...) with a cryptographically valid secp256k1 x-only public key
-            let xccAddr = generateConnectCoinAddress(entropy: entropyBytes)
-
-            return GeneratedWallet(
-                coin: coin,
-                publicAddress: xccAddr,
-                secondaryAddress: nil,
-                privateKeyHex: privateKeyHex,
-                mnemonicPhrase: mnemonic,
-                addressTypeDescription: "Pay-to-Connect Bech32m witness-v1 mainnet address with valid secp256k1 Taproot key for ConnectCoin (XCC).",
-                createdAt: now
-            )
-
-        case .commonfoundry:
-            // Common Foundry uses 64-character hex addresses on mainnet
-            var addrBytes = [UInt8](repeating: 0, count: 32)
-            _ = SecRandomCopyBytes(kSecRandomDefault, addrBytes.count, &addrBytes)
-            let cmfdAddr = addrBytes.map { String(format: "%02x", $0) }.joined()
-
-            return GeneratedWallet(
-                coin: coin,
-                publicAddress: cmfdAddr,
-                secondaryAddress: nil,
-                privateKeyHex: privateKeyHex,
-                mnemonicPhrase: mnemonic,
-                addressTypeDescription: "Native 64-character hexadecimal mainnet address for Common Foundry (CMFD).",
-                createdAt: now
-            )
-
-        case .truenorth:
-            // TrueNorth uses Bech32m with HRP 'north' and witness version 2 (north1z...) with 32-byte P2QRH program
-            var hash = [UInt8](repeating: 0, count: Int(CC_SHA256_DIGEST_LENGTH))
-            entropyBytes.withUnsafeBytes {
-                _ = CC_SHA256($0.baseAddress, CC_LONG(entropyBytes.count), &hash)
-            }
-            let bech32Addr = encodeBech32m(hrp: "north", witnessVersion: 2, program: hash)
-
-            return GeneratedWallet(
-                coin: coin,
-                publicAddress: bech32Addr,
-                secondaryAddress: nil,
-                privateKeyHex: privateKeyHex,
-                mnemonicPhrase: mnemonic,
-                addressTypeDescription: "Native SegWit P2QRH Bech32m mainnet address (starts with north1z...) for TrueNorth (TNC).",
-                createdAt: now
-            )
-
-        case .pulsemining:
-            // Privacy Bank Chain (PBC) uses Monero-style CryptoNote 97-char Base58 address (starts with Pbc... or Pbe...)
-            let pbcAddr = generatePBCAddress(entropy: entropyBytes)
-
-            return GeneratedWallet(
-                coin: coin,
-                publicAddress: pbcAddr,
-                secondaryAddress: nil,
-                privateKeyHex: privateKeyHex,
-                mnemonicPhrase: mnemonic,
-                addressTypeDescription: "CryptoNote 97-character Base58 mainnet address (starts with Pbc… or Pb…) with post-quantum protection.",
-                createdAt: now
-            )
-
-        case .blocknet:
-            // Blocknet uses 68-byte Base58 stealth address (spend pubkey + view pubkey + sha3-256 checksum)
-            let bntAddr = generateBlocknetAddress(entropy: entropyBytes)
-
-            return GeneratedWallet(
-                coin: coin,
-                publicAddress: bntAddr,
-                secondaryAddress: nil,
-                privateKeyHex: privateKeyHex,
-                mnemonicPhrase: mnemonic,
-                addressTypeDescription: "Canonical 68-byte Base58 stealth address (starts with S… or SEiNE…) for Blocknet (BNT).",
-                createdAt: now
-            )
-
-        case .parano1d:
-            // Parano1d uses 32-byte payload Bech32m address starting with o1...
-            let noidAddr = generateParano1dAddress(entropy: entropyBytes)
-
-            return GeneratedWallet(
-                coin: coin,
-                publicAddress: noidAddr,
-                secondaryAddress: nil,
-                privateKeyHex: privateKeyHex,
-                mnemonicPhrase: mnemonic,
-                addressTypeDescription: "Post-quantum Bech32m address (starts with o1…) derived from 256-bit master secret for Parano1d.",
                 createdAt: now
             )
         }

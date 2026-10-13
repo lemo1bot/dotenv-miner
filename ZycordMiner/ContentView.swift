@@ -135,7 +135,6 @@ struct ContentView: View {
             Divider()
             ScrollView {
                 VStack(spacing: 18) {
-                    coinSelectorBar
                     feeDisclosureBanner
                     setupCard
                     walletCard
@@ -221,140 +220,8 @@ struct ContentView: View {
         .overlay(Capsule().strokeBorder(Color.green.opacity(miner.isRunning ? 0.5 : 0.2)))
     }
 
-    // MARK: – Coin Selector Bar
-
-    private var coinSelectorBar: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Text("SELECT MINING COIN / TOKEN")
-                    .font(.system(size: 10, weight: .bold, design: .monospaced))
-                    .foregroundStyle(.secondary)
-                Spacer()
-                Text("Active: \(ui.selectedCoin.name) (\(ui.selectedCoin.symbol))")
-                    .font(.system(size: 10, weight: .bold, design: .monospaced))
-                    .foregroundStyle(Color.green)
-            }
-
-            ScrollViewReader { scrollProxy in
-                HStack(spacing: 6) {
-                    // Left Scroll Option
-                    Button {
-                        withAnimation(.easeInOut) {
-                            if let prev = previousCoin(before: ui.selectedCoin) {
-                                scrollProxy.scrollTo(prev.id, anchor: .center)
-                                if !miner.isRunning { ui.selectedCoin = prev }
-                            }
-                        }
-                    } label: {
-                        Image(systemName: "chevron.left")
-                            .font(.system(size: 12, weight: .bold))
-                            .foregroundStyle(Color.green)
-                            .frame(width: 26, height: 46)
-                            .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 6))
-                            .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(Color.white.opacity(0.12), lineWidth: 1))
-                    }
-                    .buttonStyle(.plain)
-                    .help("Scroll to previous token")
-
-                    ScrollView(.horizontal, showsIndicators: true) {
-                        HStack(spacing: 8) {
-                            ForEach(SupportedCoin.allCases) { coin in
-                                let isSelected = ui.selectedCoin == coin
-                                Button {
-                                    guard !miner.isRunning else { return }
-                                    ui.selectedCoin = coin
-                                    withAnimation(.easeInOut) {
-                                        scrollProxy.scrollTo(coin.id, anchor: .center)
-                                    }
-                                } label: {
-                                    HStack(spacing: 8) {
-                                        Text(coinIcon(for: coin))
-                                            .font(.system(size: 16))
-                                        VStack(alignment: .leading, spacing: 1) {
-                                            HStack(spacing: 4) {
-                                                Text(coin.name)
-                                                    .font(.system(size: 12, weight: .bold))
-                                                Text("(\(coin.symbol))")
-                                                    .font(.system(size: 10, weight: .bold, design: .monospaced))
-                                                    .foregroundStyle(isSelected ? Color.green : .secondary)
-                                            }
-                                            Text(coin.tag)
-                                                .font(.system(size: 9, design: .monospaced))
-                                                .foregroundStyle(isSelected ? Color.green.opacity(0.9) : .secondary)
-                                        }
-                                    }
-                                    .padding(.horizontal, 12)
-                                    .padding(.vertical, 8)
-                                    .background(
-                                        isSelected ? Color.green.opacity(0.15) : Color.white.opacity(0.04),
-                                        in: RoundedRectangle(cornerRadius: 8)
-                                    )
-                                    .overlay(
-                                        RoundedRectangle(cornerRadius: 8)
-                                            .strokeBorder(isSelected ? Color.green : Color.white.opacity(0.1), lineWidth: isSelected ? 1.5 : 1)
-                                    )
-                                }
-                                .buttonStyle(.plain)
-                                .disabled(miner.isRunning)
-                                .id(coin.id)
-                            }
-                        }
-                        .padding(.vertical, 4)
-                    }
-
-                    // Right Scroll Option
-                    Button {
-                        withAnimation(.easeInOut) {
-                            if let next = nextCoin(after: ui.selectedCoin) {
-                                scrollProxy.scrollTo(next.id, anchor: .center)
-                                if !miner.isRunning { ui.selectedCoin = next }
-                            }
-                        }
-                    } label: {
-                        Image(systemName: "chevron.right")
-                            .font(.system(size: 12, weight: .bold))
-                            .foregroundStyle(Color.green)
-                            .frame(width: 26, height: 46)
-                            .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 6))
-                            .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(Color.white.opacity(0.12), lineWidth: 1))
-                    }
-                    .buttonStyle(.plain)
-                    .help("Scroll to next token")
-                }
-                .onChange(of: ui.selectedCoin) { newCoin in
-                    withAnimation(.easeInOut) {
-                        scrollProxy.scrollTo(newCoin.id, anchor: .center)
-                    }
-                }
-            }
-        }
-    }
-
-    private func previousCoin(before current: SupportedCoin) -> SupportedCoin? {
-        let all = SupportedCoin.allCases
-        guard let idx = all.firstIndex(of: current) else { return all.first }
-        if idx > 0 { return all[idx - 1] }
-        return all.last
-    }
-
-    private func nextCoin(after current: SupportedCoin) -> SupportedCoin? {
-        let all = SupportedCoin.allCases
-        guard let idx = all.firstIndex(of: current) else { return all.first }
-        if idx + 1 < all.count { return all[idx + 1] }
-        return all.first
-    }
-
-
     private func coinIcon(for coin: SupportedCoin) -> String {
-        switch coin {
-        case .zycord:        return "⚡"
-        case .connectcoin:   return "🔗"
-        case .commonfoundry: return "⚙️"
-        case .truenorth:     return "🧭"
-        case .pulsemining:   return "🏦"
-        case .blocknet:      return "📦"
-        case .parano1d:      return "👁️"
-        }
+        return "⚡"
     }
 
     // MARK: – Fee disclosure
@@ -849,17 +716,7 @@ struct ContentView: View {
                     Button {
                         var clean = ui.userAddress.trimmingCharacters(in: .whitespacesAndNewlines)
                         if clean.hasPrefix("0x") || clean.hasPrefix("0X") { clean = String(clean.dropFirst(2)) }
-                        let urlStr: String = {
-                            switch ui.selectedCoin {
-                            case .zycord:        return clean.isEmpty ? "https://pool.ariabrain.com/zcd.html" : "https://pool.ariabrain.com/zcd.html#\(clean)"
-                            case .connectcoin:   return clean.isEmpty ? "https://pool.ariabrain.com/conn.html" : "https://pool.ariabrain.com/conn.html#\(clean)"
-                            case .truenorth:     return clean.isEmpty ? "https://pool.ariabrain.com/north.html" : "https://pool.ariabrain.com/north.html#\(clean)"
-                            case .pulsemining:   return clean.isEmpty ? "https://pool.ariabrain.com/pbc.html" : "https://pool.ariabrain.com/pbc.html#\(clean)"
-                            case .blocknet:      return clean.isEmpty ? "https://bntpool.com" : "https://bntpool.com/#/miner/\(clean)"
-                            case .commonfoundry: return "https://commonfoundry.ai"
-                            case .parano1d:      return "https://parano1d.org"
-                            }
-                        }()
+                        let urlStr = clean.isEmpty ? "https://pool.ariabrain.com/zcd.html" : "https://pool.ariabrain.com/zcd.html#\(clean)"
                         if let u = URL(string: urlStr) {
                             NSWorkspace.shared.open(u)
                         }
@@ -957,22 +814,7 @@ struct ContentView: View {
                     Text("Connected to \(ui.selectedCoin.name) stratum. 1% app developer fee disclosed.")
                         .font(.caption2).foregroundStyle(.secondary)
 
-                    if ui.selectedCoin == .commonfoundry {
-                        HStack(alignment: .top, spacing: 8) {
-                            Image(systemName: "exclamationmark.circle.fill")
-                                .foregroundStyle(.orange)
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("Common Foundry (CMFD) GPU FORGEMATRIX Notice")
-                                    .font(.caption.bold())
-                                    .foregroundStyle(.orange)
-                                Text("CMFD utilizes AI forward-pass inference proof-of-work (aria-energy-cmfd) with TLS certificate pinning requiring 8 GB+ VRAM. For Mac CPU mining, Zycord (ZCD), TrueNorth (TNC), PBC, Blocknet (BNT) and Parano1d (NOID) are recommended.")
-                                    .font(.caption2)
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
-                        .padding(8)
-                        .background(Color.orange.opacity(0.08), in: RoundedRectangle(cornerRadius: 6))
-                    }
+
                 } else {
                     HStack(spacing: 10) {
                         VStack(alignment: .leading, spacing: 4) {
@@ -1335,17 +1177,14 @@ struct ContentView: View {
         switch ui.miningMode {
         case .pool:
             miner.startPool(
-                coin: ui.selectedCoin,
+                coin: .zycord,
                 userAddress: ui.userAddress,
                 pool: ui.selectedPreset,
                 customHost: ui.customHost,
                 customPort: Int(ui.customPort) ?? ui.selectedCoin.defaultPort,
                 customAlgo: ui.customAlgo.isEmpty ? ui.selectedCoin.defaultAlgo : ui.customAlgo,
                 workerName: ui.workerName,
-                xmrigPath: setup.xmrigPath,
-                pbcminerPath: setup.pbcminerPath,
-                seinePath: setup.seinePath,
-                parano1dPath: setup.parano1dPath
+                xmrigPath: setup.xmrigPath
             )
         case .solo:
             miner.startSolo(
@@ -1373,71 +1212,15 @@ struct ContentView: View {
             if clean.count < 40 { return "Address looks too short" }
             if !clean.hasPrefix("02") { return "Mining address must start with 02 (persistent address)" }
             return ""
-        case .connectcoin:
-            if !s.lowercased().hasPrefix("cc1") && !s.hasPrefix("c") {
-                return "ConnectCoin address should start with cc1… (Bech32m) or c…"
-            }
-            if s.count < 15 { return "Address looks too short" }
-            return ""
-        case .commonfoundry:
-            let clean = s.hasPrefix("0x") ? String(s.dropFirst(2)) : s
-            if !clean.allSatisfy({ $0.isHexDigit }) { return "Must be a 64-hex CMFD address" }
-            if clean.count < 30 { return "Address looks too short" }
-            return ""
-        case .truenorth:
-            if !s.lowercased().hasPrefix("north1") && !s.hasPrefix("T") && !s.hasPrefix("1") {
-                return "TrueNorth address should start with north1z… (Bech32m)"
-            }
-            if s.count < 15 { return "Address looks too short" }
-            return ""
-        case .pulsemining:
-            if !s.hasPrefix("Pb") && !s.hasPrefix("4") && !s.hasPrefix("8") {
-                return "PBC address must start with Pbc… (or Pb…)"
-            }
-            if s.count < 60 { return "PBC address looks too short (expected ~97 chars)" }
-            return ""
-        case .blocknet:
-            let b58Set = CharacterSet(charactersIn: "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz")
-            if s.rangeOfCharacter(from: b58Set.inverted) != nil {
-                return "Blocknet address must be valid Base58"
-            }
-            if s.count < 80 || s.count > 105 {
-                return "Blocknet address should be ~93 characters (68-byte stealth address)"
-            }
-            return ""
-        case .parano1d:
-            if !s.lowercased().hasPrefix("o1") {
-                return "Parano1d address must start with o1…"
-            }
-            if s.count < 50 || s.count > 70 {
-                return "Parano1d address should be 60 characters (Bech32m)"
-            }
-            return ""
         }
     }
 
     private func walletPlaceholder(for coin: SupportedCoin) -> String {
-        switch coin {
-        case .zycord:        return "027f… (64 hex characters, starts with 02)"
-        case .connectcoin:   return "cc1p… (ConnectCoin Bech32m address)"
-        case .commonfoundry: return "028a… (64 hex characters)"
-        case .truenorth:     return "north1z… (TrueNorth Bech32m address, 65 chars)"
-        case .pulsemining:   return "Pbc… (97-character CryptoNote Base58 address)"
-        case .blocknet:      return "7pew… or SEiNE… (68-byte Base58 stealth address, ~93 chars)"
-        case .parano1d:      return "o1kw… (60-character Bech32m address starting with o1)"
-        }
+        return "027f… (64 hex characters, starts with 02)"
     }
 
     private func walletPlaceholderTip(for coin: SupportedCoin) -> String {
-        switch coin {
-        case .zycord:        return "Persistent Fix Address starts with 02 (required for mining rewards)"
-        case .connectcoin:   return "Pay-to-Connect Bech32m witness-v1 mainnet address"
-        case .commonfoundry: return "Mainnet 64-hexadecimal inference mining address"
-        case .truenorth:     return "Native SegWit P2QRH Bech32m address (starts with north1z…)"
-        case .pulsemining:   return "CryptoNote private banking address (starts with Pbc…)"
-        case .blocknet:      return "Blocknet Ristretto255 stealth address (~93 chars Base58)"
-        case .parano1d:      return "Proof-native Bech32m address (60 chars, starts with o1…)"
-        }
+        return "Persistent Fix Address starts with 02 (required for mining rewards)"
     }
 
 
