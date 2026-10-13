@@ -51,11 +51,14 @@ if [[ -f "$SCRIPT_DIR/update_release.py" ]]; then
     echo "Would you like to automatically update the GitHub Release"
     echo "asset (DotEnv-1.0.0.dmg) on https://github.com/$GH_USER/$REPO_NAME/releases ?"
     echo ""
-    echo "Paste your GitHub Personal Access Token (ghp_...) to update"
-    echo "the Release page now, or press Enter to skip:"
-    read -r -s -p "Token: " GH_PAT || GH_PAT=""
+    GH_PAT="${GH_TOKEN:-${2:-}}"
+    if [[ -z "$GH_PAT" || "$GH_PAT" == "--ssh" ]]; then
+        echo "Paste your GitHub Personal Access Token (ghp_...) to update"
+        echo "the Release page now, or press Enter to skip:"
+        read -r -p "Token: " GH_PAT || GH_PAT=""
+    fi
     echo ""
-    if [[ -n "$GH_PAT" ]]; then
+    if [[ -n "$GH_PAT" && "$GH_PAT" != "--ssh" ]]; then
         python3 "$SCRIPT_DIR/update_release.py" "$GH_PAT" "$GH_USER" "$REPO_NAME"
     fi
 fi
