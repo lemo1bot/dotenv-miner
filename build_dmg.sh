@@ -114,9 +114,12 @@ hdiutil create \
   -format UDZO \
   "$DMG_OUT"
 
+cp "$DMG_OUT" "$PROJECT_DIR/DotEnv-${VERSION}.dmg"
+
 echo ""
 echo "╔══════════════════════════════════════════╗"
 echo "║  Build Complete!                         ║"
 printf "║  DMG: %-35s║\n" "$DMG_OUT"
+printf "║  Root: %-34s║\n" "$PROJECT_DIR/DotEnv-${VERSION}.dmg"
 echo "╚══════════════════════════════════════════╝"
 echo ""
