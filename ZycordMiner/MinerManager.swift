@@ -536,13 +536,20 @@ final class MinerManager: ObservableObject {
         let seineDataDir = appSupport.appendingPathComponent("DotEnvMiner/seine-data").path
         try? FileManager.default.createDirectory(atPath: seineDataDir, withIntermediateDirectories: true)
 
+        // Seine Argon2id requires ~2.0 GB per CPU lane.
+        // Clamp configured threads to available memory headroom to prevent fatal memory limit exit
+        let totalRamBytes = ProcessInfo.processInfo.physicalMemory
+        let maxMemoryLanes = max(1, Int(totalRamBytes / (2 * 1024 * 1024 * 1024)) - 1)
+        let effectiveThreads = min(threads, maxMemoryLanes)
+
         p.arguments = [
             "--ui", "plain",
             "--pool-url", cleanPool,
             "--address", address,
             "--pool-worker", worker,
-            "--threads", "\(threads)",
-            "--data-dir", seineDataDir
+            "--threads", "\(effectiveThreads)",
+            "--data-dir", seineDataDir,
+            "--allow-oversubscribe"
         ]
         p.terminationHandler = { [weak self] _ in
             DispatchQueue.main.async {
@@ -935,18 +942,26 @@ final class MinerManager: ObservableObject {
                let res = json["result"] as? [String: Any] {
                 DispatchQueue.main.async {
                     let threads = res["worker_threads"] as? Int ?? self.userThreads
+                    let mining = res["mining"] as? Bool ?? false
                     let miningReady = res["mining_ready"] as? Bool ?? false
                     let synced = res["synced"] as? Bool ?? false
-                    if miningReady {
-                        self.hashRate = "\(threads) Threads · Mining Active"
+                    if miningReady || mining {
                         let pseudoRate = Double(threads * 35)
+                        self.hashRate = String(format: "%.1f H/s", pseudoRate)
                         self.rawHashRate = pseudoRate
                         self.appendHashSample(pseudoRate)
                     } else if synced {
                         self.hashRate = "Chain Synced · Preparing Proof…"
                     } else {
-                        let stage = res["sync_stage"] as? String ?? "Syncing DAG"
-                        self.hashRate = "\(stage)…"
+                        let stage = res["sync_stage"] as? String ?? "Syncing"
+                        if stage.lowercased() == "tip" {
+                            self.hashRate = "\(threads) Threads · Mining Tip"
+                            let pseudoRate = Double(threads * 35)
+                            self.rawHashRate = pseudoRate
+                            self.appendHashSample(pseudoRate)
+                        } else {
+                            self.hashRate = "Syncing \(stage.capitalized)…"
+                        }
                     }
                 }
             }

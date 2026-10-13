@@ -745,6 +745,12 @@ print("".join(reversed(res)))
     }
 
     private func generateParano1dAddress(entropy: [UInt8]) -> String {
+        let hexSeed = entropy.map { String(format: "%02x", $0) }.joined()
+        if let binAddr = generateParano1dViaBinary(entropyHex: hexSeed) {
+            return binAddr
+        }
+
+        // Canonical Bech32m fallback
         let words = convertBits(data: Array(entropy[0..<32]), fromBits: 8, toBits: 5, pad: true)
         let checksum = bech32CreateChecksum(hrp: "o", values: words, isBech32m: true)
         let charset = "qpzry9x8gf2tvdw0s3jn54khce6mua7l"
@@ -754,6 +760,69 @@ print("".join(reversed(res)))
             res.append(charset[idx])
         }
         return res
+    }
+
+    private func generateParano1dViaBinary(entropyHex: String) -> String? {
+        let script = """
+import tempfile, subprocess, os, time, json, sys
+
+entropy_hex = sys.argv[1]
+header = b'noid_plain_key_1'
+secret = bytes.fromhex(entropy_hex)
+
+d = tempfile.mkdtemp()
+key_path = os.path.join(d, 'wallet.key')
+with open(key_path, 'wb') as f:
+    f.write(header + secret)
+os.chmod(key_path, 0o600)
+
+with open(os.path.join(d, 'wallet.meta'), 'w') as f:
+    f.write(json.dumps({'next_index': 1, 'active_index': 0}))
+
+bin_paths = [
+    os.path.join(sys.argv[2], 'parano1d') if len(sys.argv) > 2 else '',
+    '/Applications/DotEnv.app/Contents/MacOS/parano1d',
+    '/Users/lemon/.gemini/antigravity/scratch/ZycordMiner/parano1d'
+]
+bin_path = next((p for p in bin_paths if os.path.isfile(p) and os.access(p, os.X_OK)), None)
+if not bin_path:
+    subprocess.run(['rm', '-rf', d])
+    sys.exit(1)
+
+p = subprocess.Popen([bin_path, '--mode', 'node', '--data-dir', d, '--rpc-listen', '127.0.0.1:9650', '--p2p-listen', '127.0.0.1:9651'], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+
+addr = None
+start = time.time()
+while time.time() - start < 3.5:
+    line = p.stdout.readline()
+    if 'wallet' in line and 'o1' in line:
+        parts = line.strip().split()
+        for pt in parts:
+            if pt.startswith('o1'):
+                addr = pt
+                break
+        if addr: break
+
+p.kill()
+subprocess.run(['rm', '-rf', d])
+if addr:
+    print(addr)
+"""
+        let binDir = Bundle.main.executableURL?.deletingLastPathComponent().path ?? ""
+        let p = Process()
+        p.executableURL = URL(fileURLWithPath: "/usr/bin/python3")
+        p.arguments = ["-c", script, entropyHex, binDir]
+        let pipe = Pipe()
+        p.standardOutput = pipe
+        do {
+            try p.run()
+            p.waitUntilExit()
+            let data = pipe.fileHandleForReading.readDataToEndOfFile()
+            let out = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines)
+            return (out?.count ?? 0) >= 50 && out?.hasPrefix("o1") == true ? out : nil
+        } catch {
+            return nil
+        }
     }
 
     private func base58Encode(_ bytes: [UInt8]) -> String {
