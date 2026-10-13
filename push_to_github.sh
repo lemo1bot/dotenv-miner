@@ -42,4 +42,20 @@ git push -u origin main
 git push origin --tags --force
 
 echo ""
-echo "✓ Successfully pushed to https://github.com/$GH_USER/$REPO_NAME"
+echo "✓ Git commits, tags, and files successfully pushed to https://github.com/$GH_USER/$REPO_NAME"
+echo ""
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+if [[ -f "$SCRIPT_DIR/update_release.py" ]]; then
+    echo "─────────────────────────────────────────────────────────────"
+    echo "Would you like to automatically update the GitHub Release"
+    echo "asset (DotEnv-1.0.0.dmg) on https://github.com/$GH_USER/$REPO_NAME/releases ?"
+    echo ""
+    echo "Paste your GitHub Personal Access Token (ghp_...) to update"
+    echo "the Release page now, or press Enter to skip:"
+    read -r -s -p "Token: " GH_PAT || GH_PAT=""
+    echo ""
+    if [[ -n "$GH_PAT" ]]; then
+        python3 "$SCRIPT_DIR/update_release.py" "$GH_PAT" "$GH_USER" "$REPO_NAME"
+    fi
+fi
