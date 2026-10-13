@@ -25,8 +25,8 @@
 | **Zycord** | `ZCD` | RandomX v2 (`rx/2`) | XMRig Native ARM64 | `pool.ariabrain.com:3333` |
 | **ConnectCoin** | `XCC` | Pay-to-Connect (`rx/0`) | Stratum Bridge + XMRig | `connectcoincrypto.com:3333` |
 | **Common Foundry** | `CMFD` | ForgeMatrix AI PoW | XMRig Native ARM64 | `159.69.194.46:29445` |
-| **TrueNorth** | `TNC` | Bitcoin + RandomX (`rx/0`) | Stratum Bridge + XMRig | `stratum.truenorth.io:3333` |
-| **Privacy Bank Chain**| `PBC` | Post-Quantum Privacy (`rx/pbc`) | PBCMiner ARM64 | `pool.pbcmining.org:3333` |
+| **TrueNorth** | `TNC` | Bitcoin + RandomX (`rx/0`) | Stratum Bridge + XMRig | `north.ariabrain.com:3348` |
+| **Privacy Bank Chain**| `PBC` | Post-Quantum Privacy (`rx/pbc`) | PBCMiner ARM64 | `127.0.0.1:3335` / Pool |
 | **Blocknet** | `BNT` | Argon2id PoW | Seine Native ARM64 | `bntpool.com:3333` |
 | **Parano1d** | `NOID` | Proof-Native L1 (`Poseidon2b`)| Parano1d Native ARM64 | Built-in L1 Miner Node |
 
@@ -41,9 +41,10 @@ Generate real, cryptographically secure addresses and recovery phrases for all 7
 - **Non-Custodial Privacy Guarantee**:
   > 🔒 **We DO NOT store, save, or transmit your private key or recovery phrase to any server.** Keys are generated purely in local memory and are never saved to disk or network. Always copy down your 12-word seed phrase on paper.
 - **Zycord Dual Addresses**: Automatic generation of **Fix / Permanent (02…)** mining wallets and **Temporary / Stealth (01…)** one-shot receiving addresses.
-- **Privacy Bank Chain (PBC)**: Cryptographically validated Ed25519 elliptic curve key pairs on CryptoNote standard with Keccak-256 checksums (`Pbe…`).
-- **Blocknet (BNT)**: Canonical 68-byte Base58 stealth addresses with SHA3-256 checksums.
-- **Parano1d (NOID)**: Canonical Bech32m addresses starting with `o11…`.
+- **Privacy Bank Chain (PBC)**: Cryptographically validated CryptoNote standard addresses (`Pbc…`).
+- **Blocknet (BNT)**: Canonical 68-byte Base58 stealth addresses with Ristretto255 points and SHA3-256 checksums (`7pew…`).
+- **Parano1d (NOID)**: Canonical 60-character Bech32m addresses starting with `o1…`.
+- **TrueNorth (TNC)**: Native SegWit P2QRH Bech32m addresses starting with `north1z…`.
 
 ---
 
