@@ -38,6 +38,7 @@ swiftc -O -parse-as-library \
   "$PROJECT_DIR/ZycordMiner/ContentView.swift" \
   "$PROJECT_DIR/ZycordMiner/MinerManager.swift" \
   "$PROJECT_DIR/ZycordMiner/SetupManager.swift" \
+  "$PROJECT_DIR/ZycordMiner/WalletGenerator.swift" \
   -o "$BUILD_DIR/$BUNDLE_NAME"
 
 echo "→ Assembling $BUNDLE_NAME.app bundle…"

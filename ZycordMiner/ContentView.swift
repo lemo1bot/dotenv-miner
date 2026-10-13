@@ -1,23 +1,64 @@
 import SwiftUI
 
+// MARK: – UI State
+
 final class UIState: ObservableObject {
-    @Published var userAddress: String {
-        didSet { UserDefaults.standard.set(userAddress, forKey: "saved_zcd_address") }
+    @Published var selectedCoin: SupportedCoin = .zycord {
+        didSet {
+            UserDefaults.standard.set(selectedCoin.rawValue, forKey: "saved_selected_coin")
+            loadAddressForCoin()
+            updatePresetForCoin()
+        }
     }
+
+    @Published var userAddress: String = "" {
+        didSet {
+            UserDefaults.standard.set(userAddress, forKey: "saved_addr_\(selectedCoin.rawValue)")
+        }
+    }
+
     @Published var workerName: String {
         didSet { UserDefaults.standard.set(workerName, forKey: "saved_worker_name") }
     }
+
     @Published var addressError = ""
     @Published var miningMode: MiningMode = .pool
-    @Published var selectedPreset = PoolPreset.ariabrain
-    @Published var customHost     = ""
-    @Published var customPort     = "3343"
-    @Published var customAlgo     = "rx/2"
-    @Published var showFeeSheet   = false
+    @Published var selectedPreset: PoolPreset = PoolPreset.ariabrain
+    @Published var customHost: String = ""
+    @Published var customPort: String = "3343"
+    @Published var customAlgo: String = "rx/2"
+    @Published var showFeeSheet: Bool = false
+
+    // Wallet Generation State
+    @Published var showWalletGenSheet: Bool = false
+    @Published var generatedWallet: GeneratedWallet? = nil
+    @Published var showPrivateKey: Bool = false
 
     init() {
-        self.userAddress = UserDefaults.standard.string(forKey: "saved_zcd_address") ?? ""
+        if let savedCoin = UserDefaults.standard.string(forKey: "saved_selected_coin"),
+           let coin = SupportedCoin(rawValue: savedCoin) {
+            self.selectedCoin = coin
+        } else {
+            self.selectedCoin = .zycord
+        }
         self.workerName = UserDefaults.standard.string(forKey: "saved_worker_name") ?? "mac"
+        loadAddressForCoin()
+        updatePresetForCoin()
+    }
+
+    func loadAddressForCoin() {
+        let key = "saved_addr_\(selectedCoin.rawValue)"
+        let saved = UserDefaults.standard.string(forKey: key) ?? ""
+        self.userAddress = saved
+        self.addressError = ""
+    }
+
+    func updatePresetForCoin() {
+        let presets = PoolPreset.presets(for: selectedCoin)
+        self.selectedPreset = presets.first ?? PoolPreset.ariabrain
+        self.customHost = ""
+        self.customPort = "\(selectedCoin.defaultPort)"
+        self.customAlgo = selectedCoin.defaultAlgo
     }
 }
 
@@ -94,10 +135,11 @@ struct ContentView: View {
             Divider()
             ScrollView {
                 VStack(spacing: 18) {
+                    coinSelectorBar
                     feeDisclosureBanner
                     setupCard
                     walletCard
-                    if ui.miningMode == .pool { earningsCard }
+                    if ui.miningMode == .pool && ui.selectedCoin == .zycord { earningsCard }
                     modeCard
                     if ui.miningMode == .pool { poolCard }
                     threadsCard
@@ -110,9 +152,12 @@ struct ContentView: View {
         .background(Color(nsColor: .windowBackgroundColor))
         .onAppear {
             setup.checkAndBuild()
-            if !ui.userAddress.isEmpty && ui.addressError.isEmpty {
+            if !ui.userAddress.isEmpty && ui.addressError.isEmpty && ui.selectedCoin == .zycord {
                 miner.fetchPoolStats(address: ui.userAddress)
             }
+        }
+        .sheet(isPresented: $ui.showWalletGenSheet) {
+            walletGenerationSheet
         }
     }
 
@@ -134,11 +179,16 @@ struct ContentView: View {
             .overlay(Circle().stroke(Color.green.opacity(0.4), lineWidth: 1))
 
             VStack(alignment: .leading, spacing: 1) {
-                Text(".env")
-                    .font(.system(size: 20, weight: .bold, design: .monospaced))
-                    .foregroundStyle(Color.green)
-                Text("Zycord (ZCD) Miner · macOS")
-                    .font(.caption)
+                HStack(spacing: 6) {
+                    Text(".env")
+                        .font(.system(size: 20, weight: .bold, design: .monospaced))
+                        .foregroundStyle(Color.green)
+                    Text("Multi-Coin Miner")
+                        .font(.caption.bold())
+                        .foregroundStyle(.secondary)
+                }
+                Text("\(ui.selectedCoin.name) (\(ui.selectedCoin.symbol)) · macOS Apple Silicon")
+                    .font(.caption2)
                     .foregroundStyle(.secondary)
             }
             Spacer()
@@ -155,7 +205,7 @@ struct ContentView: View {
                 .fill(miner.isRunning ? Color.green : Color.gray)
                 .frame(width: 8, height: 8)
                 .shadow(color: miner.isRunning ? .green : .clear, radius: 4)
-            Text(miner.isRunning ? "Mining" : "Idle")
+            Text(miner.isRunning ? "Mining \(miner.activeCoin.symbol)" : "Idle")
                 .font(.system(.caption, design: .monospaced))
                 .foregroundStyle(miner.isRunning ? .green : .secondary)
         }
@@ -163,6 +213,74 @@ struct ContentView: View {
         .padding(.vertical, 5)
         .background(Color.white.opacity(0.05), in: Capsule())
         .overlay(Capsule().strokeBorder(Color.green.opacity(miner.isRunning ? 0.5 : 0.2)))
+    }
+
+    // MARK: – Coin Selector Bar
+
+    private var coinSelectorBar: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text("SELECT MINING COIN")
+                    .font(.system(size: 10, weight: .bold, design: .monospaced))
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Text("Active: \(ui.selectedCoin.name) (\(ui.selectedCoin.symbol))")
+                    .font(.system(size: 10, weight: .bold, design: .monospaced))
+                    .foregroundStyle(Color.green)
+            }
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(SupportedCoin.allCases) { coin in
+                        let isSelected = ui.selectedCoin == coin
+                        Button {
+                            guard !miner.isRunning else { return }
+                            ui.selectedCoin = coin
+                        } label: {
+                            HStack(spacing: 8) {
+                                Text(coinIcon(for: coin))
+                                    .font(.system(size: 16))
+                                VStack(alignment: .leading, spacing: 1) {
+                                    HStack(spacing: 4) {
+                                        Text(coin.name)
+                                            .font(.system(size: 12, weight: .bold))
+                                        Text("(\(coin.symbol))")
+                                            .font(.system(size: 10, weight: .bold, design: .monospaced))
+                                            .foregroundStyle(isSelected ? Color.green : .secondary)
+                                    }
+                                    Text(coin.tag)
+                                        .font(.system(size: 9, design: .monospaced))
+                                        .foregroundStyle(isSelected ? Color.green.opacity(0.9) : .secondary)
+                                }
+                            }
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 8)
+                            .background(
+                                isSelected ? Color.green.opacity(0.15) : Color.white.opacity(0.04),
+                                in: RoundedRectangle(cornerRadius: 8)
+                            )
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 8)
+                                    .strokeBorder(isSelected ? Color.green : Color.white.opacity(0.1), lineWidth: isSelected ? 1.5 : 1)
+                            )
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(miner.isRunning)
+                    }
+                }
+                .padding(.vertical, 2)
+            }
+        }
+    }
+
+    private func coinIcon(for coin: SupportedCoin) -> String {
+        switch coin {
+        case .zycord:        return "⚡"
+        case .connectcoin:   return "🔗"
+        case .commonfoundry: return "⚙️"
+        case .truenorth:     return "🧭"
+        case .pulsemining:   return "🏦"
+        }
     }
 
     // MARK: – Fee disclosure
@@ -176,7 +294,7 @@ struct ContentView: View {
                 Text("1 % Developer Fee — Fully Transparent")
                     .font(.subheadline.bold())
                     .foregroundStyle(.green)
-                Text("This app mines **1 %** of the time (or 1 % of threads in solo mode) to the developer's address. The remaining **99 %** goes to you. This fee supports the development of .env miner.")
+                Text("This app mines **1 %** of the time to the developer's address. The remaining **99 %** goes to you. This fee supports the continuous development of .env multi-coin miner.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 Button("View details & dev address") { ui.showFeeSheet = true }
@@ -203,10 +321,10 @@ struct ContentView: View {
             }
             Divider()
             infoRow("Fee", "\(MinerManager.devFeePercent) %")
-            infoRow("Method (pool)", "Time-based: 36 seconds per hour (1 % of 3,600 s)")
-            infoRow("Method (solo)", "Thread-based: 1 % of CPU threads minimum 1")
-            infoRow("Dev address", MinerManager.devAddress)
-            infoRow("Transparency", "Shown in app UI and log at all times")
+            infoRow("Active Coin", "\(ui.selectedCoin.name) (\(ui.selectedCoin.symbol))")
+            infoRow("Method", "Time-based: 36 seconds per hour (1 % of 3,600 s)")
+            infoRow("Dev address", ui.selectedCoin.devPayoutAddress)
+            infoRow("Transparency", "Shown in app UI and log at all times. Bypassed if you are the dev.")
             Spacer()
             Button("Close") { ui.showFeeSheet = false }
                 .keyboardShortcut(.cancelAction)
@@ -214,7 +332,7 @@ struct ContentView: View {
                 .tint(.green)
         }
         .padding(24)
-        .frame(width: 520)
+        .frame(width: 540)
         .background(Color.black.opacity(0.9))
     }
 
@@ -242,25 +360,48 @@ struct ContentView: View {
                 }
             }
         } label: {
-            Label("Setup", systemImage: "wrench.and.screwdriver")
+            Label("Engine Setup", systemImage: "wrench.and.screwdriver")
                 .font(.subheadline.bold())
         }
     }
 
-    // MARK: – Wallet card
+    // MARK: – Wallet card with One-Click Generation
 
     private var walletCard: some View {
         GroupBox {
-            VStack(alignment: .leading, spacing: 10) {
-                Text("Your ZCD persistent address (starts with 02…)")
-                    .font(.caption).foregroundStyle(.secondary)
+            VStack(alignment: .leading, spacing: 12) {
+                // Header with Coin Title & 1-Click Generation Button
                 HStack {
-                    TextField("0x027f…  (64 hex chars, starts with 02)", text: $ui.userAddress)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("\(ui.selectedCoin.name) (\(ui.selectedCoin.symbol)) Payout Address")
+                            .font(.subheadline.bold())
+                        Text(walletPlaceholderTip(for: ui.selectedCoin))
+                            .font(.caption2).foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Button {
+                        ui.generatedWallet = WalletGenerator.shared.generateWallet(for: ui.selectedCoin)
+                        ui.showWalletGenSheet = true
+                    } label: {
+                        HStack(spacing: 5) {
+                            Image(systemName: "sparkles")
+                                .font(.system(size: 11, weight: .bold))
+                            Text("1-Click Generate Wallet")
+                                .font(.system(size: 11, weight: .bold))
+                        }
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(.green)
+                    .controlSize(.small)
+                }
+
+                HStack {
+                    TextField(walletPlaceholder(for: ui.selectedCoin), text: $ui.userAddress)
                         .textFieldStyle(.roundedBorder)
                         .font(.system(.body, design: .monospaced))
                         .onChange(of: ui.userAddress) { v in
-                            ui.addressError = validateAddress(v)
-                            if validateAddress(v).isEmpty && !v.isEmpty {
+                            ui.addressError = validateAddress(v, for: ui.selectedCoin)
+                            if ui.addressError.isEmpty && !v.isEmpty && ui.selectedCoin == .zycord {
                                 miner.fetchPoolStats(address: v)
                             }
                         }
@@ -268,18 +409,39 @@ struct ContentView: View {
                         if let s = NSPasteboard.general.string(forType: .string) {
                             let trimmed = s.trimmingCharacters(in: .whitespacesAndNewlines)
                             ui.userAddress = trimmed
-                            ui.addressError = validateAddress(trimmed)
-                            if validateAddress(trimmed).isEmpty && !trimmed.isEmpty {
+                            ui.addressError = validateAddress(trimmed, for: ui.selectedCoin)
+                            if ui.addressError.isEmpty && !trimmed.isEmpty && ui.selectedCoin == .zycord {
                                 miner.fetchPoolStats(address: trimmed)
                             }
                         }
                     } label: { Image(systemName: "doc.on.clipboard") }
                     .help("Paste from clipboard")
                 }
+
                 if !ui.addressError.isEmpty {
                     Label(ui.addressError, systemImage: "exclamationmark.triangle")
                         .font(.caption).foregroundStyle(.orange)
                 }
+
+                // Zycord-specific Persistent vs Temporary guidance
+                if ui.selectedCoin == .zycord {
+                    HStack(alignment: .top, spacing: 8) {
+                        Image(systemName: "info.circle.fill")
+                            .font(.caption)
+                            .foregroundStyle(.green)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Zycord Address Types: **Fix (02…)** vs **Temporary (01…)**")
+                                .font(.caption.bold())
+                                .foregroundStyle(.green)
+                            Text("• **Fix (starts with 02)**: Your permanent mining wallet. Mining payouts must be sent to this address.\n• **Temporary (starts with 01)**: One-shot stealth address for receiving single private payments. Do not use for mining pools.")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .padding(8)
+                    .background(Color.green.opacity(0.06), in: RoundedRectangle(cornerRadius: 6))
+                }
+
                 HStack {
                     Text("Worker name:")
                         .font(.caption).foregroundStyle(.secondary)
@@ -287,16 +449,214 @@ struct ContentView: View {
                         .textFieldStyle(.roundedBorder)
                         .frame(maxWidth: 160)
                         .font(.system(.caption, design: .monospaced))
+
+                    Spacer()
+
+                    Link(destination: URL(string: ui.selectedCoin.officialUrl)!) {
+                        HStack(spacing: 3) {
+                            Text("Official Website")
+                            Image(systemName: "arrow.up.right")
+                        }
+                        .font(.caption2)
+                        .foregroundStyle(.green)
+                    }
                 }
-                Text("⚠️ Must be a persistent (0x02) address — one-shot addresses silently lose mining rewards.")
-                    .font(.caption2).foregroundStyle(.secondary)
             }
         } label: {
-            Label("Payout Wallet", systemImage: "wallet.pass").font(.subheadline.bold())
+            Label("\(ui.selectedCoin.name) Wallet", systemImage: "wallet.pass")
+                .font(.subheadline.bold())
         }
     }
 
-    // MARK: – Earnings & Pool Balances Card
+    // MARK: – 1-Click Wallet Generation Sheet
+
+    private var walletGenerationSheet: some View {
+        guard let wallet = ui.generatedWallet else { return AnyView(EmptyView()) }
+
+        return AnyView(
+            VStack(alignment: .leading, spacing: 16) {
+                // Header
+                HStack {
+                    Text(coinIcon(for: wallet.coin))
+                        .font(.title)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("\(wallet.coin.name) (\(wallet.coin.symbol)) Wallet Generated")
+                            .font(.title3.bold())
+                        Text("100% Client-Side · Cryptographically Secure CSPRNG")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Button("Close") { ui.showWalletGenSheet = false }
+                        .keyboardShortcut(.cancelAction)
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                }
+
+                Divider()
+
+                // Security Notice Banner (MANDATORY non-custodial disclosure)
+                HStack(alignment: .top, spacing: 10) {
+                    Image(systemName: "lock.shield.fill")
+                        .font(.title3)
+                        .foregroundStyle(.green)
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("🔒 Non-Custodial & 100% Private (No Cloud Storage)")
+                            .font(.caption.bold())
+                            .foregroundStyle(.green)
+                        Text("We **DO NOT store, save, or transmit** your private key or recovery phrase to any server. These keys are generated locally in memory. **Please write down your 12-word recovery phrase and private key on paper.** If lost, funds cannot be recovered.")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .padding(10)
+                .background(Color.green.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
+                .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Color.green.opacity(0.35)))
+
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 14) {
+                        // 1. Primary Address (or Fix address for Zycord)
+                        VStack(alignment: .leading, spacing: 6) {
+                            HStack {
+                                Text(wallet.coin == .zycord ? "FIX / PERMANENT MINING ADDRESS (02…)" : "PUBLIC MINING ADDRESS")
+                                    .font(.system(size: 10, weight: .bold, design: .monospaced))
+                                    .foregroundStyle(Color.green)
+                                Spacer()
+                                copyButton(text: wallet.publicAddress, label: "Copy")
+                            }
+                            Text(wallet.publicAddress)
+                                .font(.system(size: 12, weight: .bold, design: .monospaced))
+                                .padding(8)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .background(Color.black.opacity(0.6), in: RoundedRectangle(cornerRadius: 6))
+                                .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(Color.green.opacity(0.3)))
+                                .textSelection(.enabled)
+                            Text(wallet.addressTypeDescription)
+                                .font(.caption2).foregroundStyle(.secondary)
+                        }
+
+                        // 2. Zycord Temporary Address (if Zycord)
+                        if wallet.coin == .zycord, let temp = wallet.secondaryAddress {
+                            VStack(alignment: .leading, spacing: 6) {
+                                HStack {
+                                    Text("TEMPORARY / STEALTH RECEIVE ADDRESS (01…)")
+                                        .font(.system(size: 10, weight: .bold, design: .monospaced))
+                                        .foregroundStyle(Color.orange)
+                                    Spacer()
+                                    copyButton(text: temp, label: "Copy")
+                                }
+                                Text(temp)
+                                    .font(.system(size: 12, weight: .bold, design: .monospaced))
+                                    .padding(8)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .background(Color.black.opacity(0.6), in: RoundedRectangle(cornerRadius: 6))
+                                    .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(Color.orange.opacity(0.3)))
+                                    .textSelection(.enabled)
+                                Text("⚠️ One-shot address for private transfers only. Do not use for mining pools.")
+                                    .font(.caption2).foregroundStyle(.secondary)
+                            }
+                        }
+
+                        Divider().opacity(0.3)
+
+                        // 3. 12-Word Recovery Phrase
+                        VStack(alignment: .leading, spacing: 6) {
+                            HStack {
+                                Text("12-WORD BIP-39 RECOVERY PHRASE")
+                                    .font(.system(size: 10, weight: .bold, design: .monospaced))
+                                    .foregroundStyle(.secondary)
+                                Spacer()
+                                copyButton(text: wallet.mnemonicPhrase, label: "Copy Phrase")
+                            }
+
+                            let words = wallet.mnemonicPhrase.components(separatedBy: " ")
+                            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())], spacing: 6) {
+                                ForEach(Array(words.enumerated()), id: \.offset) { idx, word in
+                                    HStack(spacing: 4) {
+                                        Text("\(idx + 1).")
+                                            .font(.system(size: 9, design: .monospaced))
+                                            .foregroundStyle(.secondary)
+                                        Text(word)
+                                            .font(.system(size: 11, weight: .bold, design: .monospaced))
+                                            .foregroundStyle(.primary)
+                                    }
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 4)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .background(Color.white.opacity(0.04), in: RoundedRectangle(cornerRadius: 4))
+                                }
+                            }
+                        }
+
+                        Divider().opacity(0.3)
+
+                        // 4. Private Key (Hex)
+                        VStack(alignment: .leading, spacing: 6) {
+                            HStack {
+                                Text("PRIVATE KEY (32-BYTE HEX)")
+                                    .font(.system(size: 10, weight: .bold, design: .monospaced))
+                                    .foregroundStyle(.secondary)
+                                Spacer()
+                                Button(ui.showPrivateKey ? "Hide" : "Reveal") {
+                                    ui.showPrivateKey.toggle()
+                                }
+                                .font(.caption2)
+                                .buttonStyle(.borderless)
+                                copyButton(text: wallet.privateKeyHex, label: "Copy Key")
+                            }
+
+                            Text(ui.showPrivateKey ? wallet.privateKeyHex : "••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••")
+                                .font(.system(size: 11, design: .monospaced))
+                                .padding(8)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .background(Color.black.opacity(0.6), in: RoundedRectangle(cornerRadius: 6))
+                                .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(Color.white.opacity(0.15)))
+                                .textSelection(.enabled)
+                        }
+                    }
+                    .padding(.vertical, 4)
+                }
+
+                // Action Bar
+                HStack {
+                    Button {
+                        ui.userAddress = wallet.publicAddress
+                        ui.showWalletGenSheet = false
+                    } label: {
+                        Label("Use Address for Mining & Close", systemImage: "checkmark.circle.fill")
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(.green)
+
+                    Spacer()
+
+                    Button("Done") { ui.showWalletGenSheet = false }
+                        .buttonStyle(.bordered)
+                }
+            }
+            .padding(20)
+            .frame(width: 580, height: 600)
+            .background(Color(nsColor: .windowBackgroundColor))
+        )
+    }
+
+    private func copyButton(text: String, label: String) -> some View {
+        Button {
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(text, forType: .string)
+        } label: {
+            HStack(spacing: 3) {
+                Image(systemName: "doc.on.clipboard")
+                    .font(.system(size: 9))
+                Text(label)
+                    .font(.system(size: 10))
+            }
+        }
+        .buttonStyle(.bordered)
+        .controlSize(.mini)
+    }
+
+    // MARK: – Earnings & Pool Balances Card (AriaPool ZCD)
 
     private var earningsCard: some View {
         GroupBox {
@@ -308,7 +668,7 @@ struct ContentView: View {
                             .fill(Color.green)
                             .frame(width: 8, height: 8)
                             .shadow(color: .green, radius: 4)
-                        Text("AriaPool Live Telemetry")
+                        Text("AriaPool Live Telemetry (\(ui.selectedCoin.symbol))")
                             .font(.system(size: 11, weight: .bold, design: .monospaced))
                             .foregroundStyle(Color.green)
                     }
@@ -434,7 +794,7 @@ struct ContentView: View {
             }
             .padding(4)
         } label: {
-            Label("Earnings & Payout Telemetry", systemImage: "banknote.fill")
+            Label("AriaPool Earnings Telemetry", systemImage: "banknote.fill")
                 .font(.subheadline.bold())
                 .foregroundStyle(Color.green)
         }
@@ -479,8 +839,8 @@ struct ContentView: View {
             .disabled(miner.isRunning)
 
             Text(ui.miningMode == .pool
-                 ? "Pool mining: more consistent earnings, shares effort with other miners."
-                 : "Solo mining: if you find a block you keep it all — but harder solo on a new chain.")
+                 ? "Pool mining: shared hashrate for steady payouts."
+                 : "Solo mining: block rewards paid directly to your wallet.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -495,13 +855,13 @@ struct ContentView: View {
         GroupBox {
             VStack(alignment: .leading, spacing: 12) {
                 Picker("Pool", selection: $ui.selectedPreset) {
-                    ForEach(PoolPreset.allPresets) { p in
+                    ForEach(PoolPreset.presets(for: ui.selectedCoin)) { p in
                         Text(p.name).tag(p)
                     }
                 }
                 .disabled(miner.isRunning)
 
-                if ui.selectedPreset.id != "custom" {
+                if !ui.selectedPreset.id.hasPrefix("custom") {
                     HStack {
                         poolDetail("Host", ui.selectedPreset.host)
                         Spacer()
@@ -512,38 +872,38 @@ struct ContentView: View {
                     .padding(10)
                     .background(Color.green.opacity(0.06), in: RoundedRectangle(cornerRadius: 8))
 
-                    Text("Pool fee: 1% (AriaPool PPLNS) — separate from the 1% app dev fee. Payments after 240 confirmations (~2 h).")
+                    Text("Connected to \(ui.selectedCoin.name) stratum. 1% app developer fee disclosed.")
                         .font(.caption2).foregroundStyle(.secondary)
                 } else {
                     HStack(spacing: 10) {
                         VStack(alignment: .leading, spacing: 4) {
                             Text("Host").font(.caption2).foregroundStyle(.secondary)
-                            TextField("pool.example.com", text: $ui.customHost)
+                            TextField(ui.selectedCoin.defaultHost, text: $ui.customHost)
                                 .textFieldStyle(.roundedBorder)
                                 .font(.system(.caption, design: .monospaced))
                         }
                         VStack(alignment: .leading, spacing: 4) {
                             Text("Port").font(.caption2).foregroundStyle(.secondary)
-                            TextField("3343", text: $ui.customPort)
+                            TextField("\(ui.selectedCoin.defaultPort)", text: $ui.customPort)
                                 .textFieldStyle(.roundedBorder)
                                 .frame(width: 70)
                                 .font(.system(.caption, design: .monospaced))
                         }
                         VStack(alignment: .leading, spacing: 4) {
                             Text("Algorithm").font(.caption2).foregroundStyle(.secondary)
-                            TextField("rx/2", text: $ui.customAlgo)
+                            TextField(ui.selectedCoin.defaultAlgo, text: $ui.customAlgo)
                                 .textFieldStyle(.roundedBorder)
                                 .frame(width: 70)
                                 .font(.system(.caption, design: .monospaced))
                         }
                     }
                     .disabled(miner.isRunning)
-                    Text("Use rx/2 for Zycord (RandomX v2). Standard XMRig stratum protocol.")
+                    Text("Standard XMRig stratum protocol. Algorithm: \(ui.selectedCoin.defaultAlgo)")
                         .font(.caption2).foregroundStyle(.secondary)
                 }
             }
         } label: {
-            Label("Pool", systemImage: "network").font(.subheadline.bold())
+            Label("\(ui.selectedCoin.name) Pool Settings", systemImage: "network").font(.subheadline.bold())
         }
     }
 
@@ -592,7 +952,7 @@ struct ContentView: View {
                 }.font(.caption2)
             }
         } label: {
-            Label("CPU Threads", systemImage: "cpu.fill").font(.subheadline.bold())
+            Label("CPU Threads Allocation", systemImage: "cpu.fill").font(.subheadline.bold())
         }
     }
 
@@ -648,6 +1008,39 @@ struct ContentView: View {
                         .background(Color.black.opacity(0.6), in: RoundedRectangle(cornerRadius: 6))
                         .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(Color.green.opacity(0.25)))
                 }
+
+                // Real-Time Token Earnings Estimates
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack {
+                        Text("ESTIMATED REALTIME TOKEN EARNINGS (\(ui.selectedCoin.symbol))")
+                            .font(.system(size: 9, weight: .bold, design: .monospaced))
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                        Text("Live calc · diff & block reward")
+                            .font(.system(size: 9, design: .monospaced))
+                            .foregroundStyle(.secondary)
+                    }
+
+                    HStack(spacing: 8) {
+                        earningTile(
+                            period: "1 HOUR",
+                            amount: String(format: "%.4f %@", miner.estimatedEarningsPerHour(coin: ui.selectedCoin), ui.selectedCoin.symbol),
+                            tint: .green
+                        )
+                        earningTile(
+                            period: "24 HOURS (DAILY)",
+                            amount: String(format: "%.3f %@", miner.estimatedEarningsPerDay(coin: ui.selectedCoin), ui.selectedCoin.symbol),
+                            tint: .green
+                        )
+                        earningTile(
+                            period: "30 DAYS (MONTHLY)",
+                            amount: String(format: "%.1f %@", miner.estimatedEarningsPerMonth(coin: ui.selectedCoin), ui.selectedCoin.symbol),
+                            tint: .cyan
+                        )
+                    }
+                }
+
+                Divider().opacity(0.2)
 
                 // Speed Breakdown: 10s / 60s / 15m
                 HStack(spacing: 8) {
@@ -705,10 +1098,28 @@ struct ContentView: View {
             }
             .padding(4)
         } label: {
-            Label("Realtime Hash Telemetry", systemImage: "waveform.path.ecg")
+            Label("Realtime Mining Telemetry & Earnings", systemImage: "waveform.path.ecg")
                 .font(.subheadline.bold())
                 .foregroundStyle(Color.green)
         }
+    }
+
+    private func earningTile(period: String, amount: String, tint: Color) -> some View {
+        VStack(spacing: 2) {
+            Text(period)
+                .font(.system(size: 9, design: .monospaced))
+                .foregroundStyle(.secondary)
+            Text(amount)
+                .font(.system(size: 11, weight: .bold, design: .monospaced))
+                .foregroundStyle(tint)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 6)
+        .padding(.horizontal, 4)
+        .background(Color.white.opacity(0.04), in: RoundedRectangle(cornerRadius: 6))
+        .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(tint.opacity(0.2)))
     }
 
     private func speedPill(_ title: String, _ value: String) -> some View {
@@ -789,7 +1200,7 @@ struct ContentView: View {
 
                     if !miner.isRunning {
                         Button { startMining() } label: {
-                            Label("Start Mining", systemImage: "play.fill")
+                            Label("Start Mining \(ui.selectedCoin.symbol)", systemImage: "play.fill")
                         }
                         .buttonStyle(.borderedProminent)
                         .tint(.green)
@@ -816,7 +1227,7 @@ struct ContentView: View {
     }
 
     private var currentPoolHost: String {
-        ui.selectedPreset.id == "custom" ? ui.customHost : ui.selectedPreset.host
+        ui.selectedPreset.id.hasPrefix("custom") ? ui.customHost : ui.selectedPreset.host
     }
 
     private func startMining() {
@@ -824,11 +1235,12 @@ struct ContentView: View {
         switch ui.miningMode {
         case .pool:
             miner.startPool(
+                coin: ui.selectedCoin,
                 userAddress: ui.userAddress,
                 pool: ui.selectedPreset,
                 customHost: ui.customHost,
-                customPort: Int(ui.customPort) ?? 3343,
-                customAlgo: ui.customAlgo.isEmpty ? "rx/2" : ui.customAlgo,
+                customPort: Int(ui.customPort) ?? ui.selectedCoin.defaultPort,
+                customAlgo: ui.customAlgo.isEmpty ? ui.selectedCoin.defaultAlgo : ui.customAlgo,
                 workerName: ui.workerName,
                 xmrigPath: setup.xmrigPath
             )
@@ -846,15 +1258,62 @@ struct ContentView: View {
             .first!.appendingPathComponent("DotEnvMiner/node").path
     }
 
-    // MARK: – Helpers
+    // MARK: – Helpers & Validation
 
-    private func validateAddress(_ a: String) -> String {
+    private func validateAddress(_ a: String, for coin: SupportedCoin) -> String {
         guard !a.isEmpty else { return "" }
-        let s = a.hasPrefix("0x") ? String(a.dropFirst(2)) : a
-        if !s.allSatisfy({ $0.isHexDigit }) { return "Must be a hex ZCD address" }
-        if s.count < 40 { return "Address looks too short" }
-        if !s.hasPrefix("02") { return "Persistent address must start with 02" }
-        return ""
+        let s = a.trimmingCharacters(in: .whitespacesAndNewlines)
+        switch coin {
+        case .zycord:
+            let clean = s.hasPrefix("0x") ? String(s.dropFirst(2)) : s
+            if !clean.allSatisfy({ $0.isHexDigit }) { return "Must be a hex ZCD address" }
+            if clean.count < 40 { return "Address looks too short" }
+            if !clean.hasPrefix("02") { return "Mining address must start with 02 (persistent address)" }
+            return ""
+        case .connectcoin:
+            if !s.lowercased().hasPrefix("cc1") && !s.hasPrefix("c") {
+                return "ConnectCoin address should start with cc1… (Bech32m) or c…"
+            }
+            if s.count < 15 { return "Address looks too short" }
+            return ""
+        case .commonfoundry:
+            let clean = s.hasPrefix("0x") ? String(s.dropFirst(2)) : s
+            if !clean.allSatisfy({ $0.isHexDigit }) { return "Must be a 64-hex CMFD address" }
+            if clean.count < 30 { return "Address looks too short" }
+            return ""
+        case .truenorth:
+            if !s.lowercased().hasPrefix("north1") && !s.hasPrefix("T") && !s.hasPrefix("1") {
+                return "TrueNorth address should start with north1… or T…"
+            }
+            if s.count < 15 { return "Address looks too short" }
+            return ""
+        case .pulsemining:
+            if !s.hasPrefix("4") && !s.hasPrefix("8") {
+                return "PBC address must start with 4 (or 8 for subaddress)"
+            }
+            if s.count < 60 { return "CryptoNote address looks too short (expected ~95 chars)" }
+            return ""
+        }
+    }
+
+    private func walletPlaceholder(for coin: SupportedCoin) -> String {
+        switch coin {
+        case .zycord:        return "027f… (64 hex characters, starts with 02)"
+        case .connectcoin:   return "cc1p… (ConnectCoin Bech32m address)"
+        case .commonfoundry: return "028a… (64 hex characters)"
+        case .truenorth:     return "north1q… (TrueNorth Bech32 address)"
+        case .pulsemining:   return "427f… (95-character CryptoNote address)"
+        }
+    }
+
+    private func walletPlaceholderTip(for coin: SupportedCoin) -> String {
+        switch coin {
+        case .zycord:        return "Persistent Fix Address starts with 02 (required for mining rewards)"
+        case .connectcoin:   return "Pay-to-Connect Bech32m witness-v1 mainnet address"
+        case .commonfoundry: return "Mainnet 64-hexadecimal inference mining address"
+        case .truenorth:     return "Native SegWit Bech32 address (starts with north1…)"
+        case .pulsemining:   return "Monero-grade private banking address (starts with 4…)"
+        }
     }
 
     private func logColor(for line: String) -> Color {

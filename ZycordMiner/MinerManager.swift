@@ -18,6 +18,24 @@ struct PoolPreset: Identifiable, Hashable {
     let port: Int
     let algo: String
 
+    static func presets(for coin: SupportedCoin) -> [PoolPreset] {
+        let primary = PoolPreset(
+            id: "\(coin.rawValue)_default",
+            name: "\(coin.name) (\(coin.defaultHost))",
+            host: coin.defaultHost,
+            port: coin.defaultPort,
+            algo: coin.defaultAlgo
+        )
+        let custom = PoolPreset(
+            id: "custom",
+            name: "Custom pool…",
+            host: "",
+            port: coin.defaultPort,
+            algo: coin.defaultAlgo
+        )
+        return [primary, custom]
+    }
+
     static let ariabrain = PoolPreset(
         id: "ariabrain",
         name: "AriaPool (ariabrain.com)",
@@ -43,6 +61,7 @@ final class MinerManager: ObservableObject {
     // MARK: – Published state
     @Published var isRunning          = false
     @Published var logLines: [String] = []
+    @Published var activeCoin: SupportedCoin = .zycord
 
     // Live Hashrate Metrics
     @Published var hashRate           = "–"
@@ -106,39 +125,66 @@ final class MinerManager: ObservableObject {
         return String(format: "%02d:%02d:%02d", h, m, s)
     }
 
+    // MARK: – Real-Time Token Earnings Calculations
+
+    var currentDifficultyDouble: Double {
+        let clean = currentDifficulty.replacingOccurrences(of: ",", with: "").trimmingCharacters(in: .whitespaces)
+        return Double(clean) ?? 200_000.0
+    }
+
+    func estimatedEarningsPerHour(coin: SupportedCoin) -> Double {
+        guard rawHashRate > 0 else { return 0.0 }
+        let diff = max(1000.0, currentDifficultyDouble)
+        let hashesPerHour = rawHashRate * 3600.0
+        let blocksPerHour = hashesPerHour / diff
+        return blocksPerHour * coin.blockReward
+    }
+
+    func estimatedEarningsPerDay(coin: SupportedCoin) -> Double {
+        return estimatedEarningsPerHour(coin: coin) * 24.0
+    }
+
+    func estimatedEarningsPerMonth(coin: SupportedCoin) -> Double {
+        return estimatedEarningsPerDay(coin: coin) * 30.0
+    }
+
     // MARK: – Start (pool)
 
-    func startPool(userAddress: String,
+    func startPool(coin: SupportedCoin,
+                   userAddress: String,
                    pool: PoolPreset,
                    customHost: String, customPort: Int, customAlgo: String,
                    workerName: String,
                    xmrigPath: String) {
         guard !isRunning else { return }
 
+        self.activeCoin = coin
         resetTelemetry()
 
-        let host  = pool.id == "custom" ? customHost : pool.host
-        let port  = pool.id == "custom" ? customPort : pool.port
-        let algo  = pool.id == "custom" ? customAlgo : pool.algo
+        let host  = pool.id.hasPrefix("custom") ? customHost : pool.host
+        let port  = pool.id.hasPrefix("custom") ? customPort : pool.port
+        let algo  = pool.id.hasPrefix("custom") ? customAlgo : pool.algo
 
-        // Strip 0x prefix so address is exactly the 64-hex format expected by the pool
+        // Strip 0x prefix if present
         var cleanAddr = userAddress.trimmingCharacters(in: .whitespacesAndNewlines)
         if cleanAddr.hasPrefix("0x") || cleanAddr.hasPrefix("0X") {
             cleanAddr = String(cleanAddr.dropFirst(2))
         }
 
-        // Rig identifier (e.g. 02...address.mac)
+        // Rig identifier (e.g. address.mac)
         let rig = workerName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "mac" : workerName.trimmingCharacters(in: .whitespacesAndNewlines)
         let login = "\(cleanAddr).\(rig)"
         let poolURL = "\(host):\(port)"
         let threads = max(1, userThreads)
+        let devAddr = coin.devPayoutAddress
 
         log("╔══════════════════════════════════════════╗")
-        log("║  .env Miner  ·  ZCD/RandomX  ·  Pool    ║")
+        log("║  .env Miner  ·  \(coin.name) (\(coin.symbol))  ·  Pool ║")
         log("║  1 % developer fee — disclosed           ║")
         log("╚══════════════════════════════════════════╝")
+        log("Coin    : \(coin.name) (\(coin.symbol))")
         log("Pool    : \(poolURL)")
-        log("Algo    : \(algo) (RandomX v2)")
+        log("Algo    : \(algo) (\(coin.tag))")
         log("Wallet  : \(cleanAddr)")
         log("Worker  : \(rig)")
         log("Threads : \(threads) / \(totalCores) cores")
@@ -150,7 +196,7 @@ final class MinerManager: ObservableObject {
         if sleepAssertion == nil {
             sleepAssertion = ProcessInfo.processInfo.beginActivity(
                 options: [.userInitiated, .idleSystemSleepDisabled],
-                reason: "Mining Zycord (ZCD)"
+                reason: "Mining \(coin.name) (\(coin.symbol))"
             )
         }
 
@@ -159,14 +205,16 @@ final class MinerManager: ObservableObject {
         )
         activeMiningAddress = cleanAddr
         startProcess()
-        startTelemetryTimers(xmrigPath: xmrigPath, pool: poolURL, algo: algo, threads: threads, userLogin: login)
+        startTelemetryTimers(xmrigPath: xmrigPath, pool: poolURL, algo: algo, threads: threads, userLogin: login, devAddress: devAddr)
 
-        // Poll pool stats immediately and every 15 seconds while mining
-        fetchPoolStats(address: cleanAddr)
-        poolTimer?.invalidate()
-        poolTimer = Timer.scheduledTimer(withTimeInterval: 15.0, repeats: true) { [weak self] _ in
-            guard let self = self, self.isRunning else { return }
-            self.fetchPoolStats(address: self.activeMiningAddress)
+        // If Zycord, poll AriaPool stats immediately and every 15 seconds while mining
+        if coin == .zycord {
+            fetchPoolStats(address: cleanAddr)
+            poolTimer?.invalidate()
+            poolTimer = Timer.scheduledTimer(withTimeInterval: 15.0, repeats: true) { [weak self] _ in
+                guard let self = self, self.isRunning else { return }
+                self.fetchPoolStats(address: self.activeMiningAddress)
+            }
         }
     }
 
@@ -254,7 +302,7 @@ final class MinerManager: ObservableObject {
         hashRateHistory = Array(repeating: 0.0, count: 20)
     }
 
-    private func startTelemetryTimers(xmrigPath: String, pool: String, algo: String, threads: Int, userLogin: String) {
+    private func startTelemetryTimers(xmrigPath: String, pool: String, algo: String, threads: Int, userLogin: String, devAddress: String = MinerManager.devAddress) {
         queryTimer?.invalidate()
         queryTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
             guard let self = self, self.isRunning else { return }
@@ -268,7 +316,7 @@ final class MinerManager: ObservableObject {
 
         // Schedule pool dev fee (1% = 36 seconds per hour)
         // Skip if the user is already mining to the dev address!
-        let isDevSelf = userLogin.lowercased().hasPrefix(Self.devAddress.lowercased())
+        let isDevSelf = userLogin.lowercased().hasPrefix(devAddress.lowercased())
         if !pool.isEmpty && !isDevSelf {
             let userInterval: TimeInterval = 3564  // 59.4 minutes
             let devInterval:  TimeInterval = 36    // 36 seconds
@@ -284,7 +332,7 @@ final class MinerManager: ObservableObject {
 
                 let devP = self.makeXMRig(path: xmrigPath,
                                            poolURL: pool,
-                                           login: Self.devAddress + ".dev",
+                                           login: devAddress + ".dev",
                                            algo: algo,
                                            threads: threads)
                 self.process = devP
