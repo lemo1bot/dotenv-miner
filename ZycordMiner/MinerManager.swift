@@ -146,6 +146,25 @@ final class MinerManager: ObservableObject {
     private var devFeeTimer:    Timer?
     private var queryTimer:     Timer?
     private var poolTimer:      Timer?
+    // Auto-Restart & Session Memory
+    @Published var autoRestart:        Bool = true
+    private var isIntentionalStop:     Bool = false
+    private var restartTimer:          Timer?
+    private struct MiningSessionConfig {
+        let coin: SupportedCoin
+        let userAddress: String
+        let pool: PoolPreset
+        let customHost: String
+        let customPort: Int
+        let customAlgo: String
+        let workerName: String
+        let xmrigPath: String
+        let pbcminerPath: String
+        let seinePath: String
+        let parano1dPath: String
+    }
+    private var lastSessionConfig: MiningSessionConfig? = nil
+
     private var activeMiningAddress: String = ""
     private var isSwitchingFee: Bool = false
     private var sleepAssertion: NSObjectProtocol?
@@ -212,6 +231,23 @@ final class MinerManager: ObservableObject {
                    seinePath: String = "",
                    parano1dPath: String = "") {
         guard !isRunning else { return }
+
+        isIntentionalStop = false
+        restartTimer?.invalidate()
+        restartTimer = nil
+        lastSessionConfig = MiningSessionConfig(
+            coin: coin,
+            userAddress: userAddress,
+            pool: pool,
+            customHost: customHost,
+            customPort: customPort,
+            customAlgo: customAlgo,
+            workerName: workerName,
+            xmrigPath: xmrigPath,
+            pbcminerPath: pbcminerPath,
+            seinePath: seinePath,
+            parano1dPath: parano1dPath
+        )
 
         self.activeCoin = coin
         resetTelemetry()
@@ -334,6 +370,9 @@ final class MinerManager: ObservableObject {
     // MARK: – Stop
 
     func stop() {
+        isIntentionalStop = true
+        restartTimer?.invalidate()
+        restartTimer = nil
         guard isRunning else { return }
         log("Stopping miner…")
         logTask?.cancel(); logTask = nil
@@ -483,10 +522,35 @@ final class MinerManager: ObservableObject {
             "--stats-secs", "1",
             "--allow-oversubscribe"
         ]
-        p.terminationHandler = { [weak self] _ in
+        p.terminationHandler = { [weak self] proc in
             DispatchQueue.main.async {
                 guard let self = self else { return }
-                if !self.isSwitchingFee {
+                if self.isSwitchingFee { return }
+
+                if !self.isIntentionalStop && self.autoRestart {
+                    self.log("⚠️ Miner stopped (status: \(proc.terminationStatus)). Auto-restarting in 3 seconds…")
+                    self.hashRate = "Auto-restarting in 3s…"
+                    self.isRunning = false
+
+                    self.restartTimer?.invalidate()
+                    self.restartTimer = Timer.scheduledTimer(withTimeInterval: 3.0, repeats: false) { [weak self] _ in
+                        guard let self = self, !self.isIntentionalStop, let cfg = self.lastSessionConfig else { return }
+                        self.log("🔄 Auto-restarting miner now…")
+                        self.startPool(
+                            coin: cfg.coin,
+                            userAddress: cfg.userAddress,
+                            pool: cfg.pool,
+                            customHost: cfg.customHost,
+                            customPort: cfg.customPort,
+                            customAlgo: cfg.customAlgo,
+                            workerName: cfg.workerName,
+                            xmrigPath: cfg.xmrigPath,
+                            pbcminerPath: cfg.pbcminerPath,
+                            seinePath: cfg.seinePath,
+                            parano1dPath: cfg.parano1dPath
+                        )
+                    }
+                } else {
                     self.isRunning = false
                 }
             }
@@ -508,10 +572,35 @@ final class MinerManager: ObservableObject {
             "--no-color",
             "--donate-level", "0"       // app handles the dev fee itself
         ]
-        p.terminationHandler = { [weak self] _ in
+        p.terminationHandler = { [weak self] proc in
             DispatchQueue.main.async {
                 guard let self = self else { return }
-                if !self.isSwitchingFee {
+                if self.isSwitchingFee { return }
+
+                if !self.isIntentionalStop && self.autoRestart {
+                    self.log("⚠️ Miner stopped (status: \(proc.terminationStatus)). Auto-restarting in 3 seconds…")
+                    self.hashRate = "Auto-restarting in 3s…"
+                    self.isRunning = false
+
+                    self.restartTimer?.invalidate()
+                    self.restartTimer = Timer.scheduledTimer(withTimeInterval: 3.0, repeats: false) { [weak self] _ in
+                        guard let self = self, !self.isIntentionalStop, let cfg = self.lastSessionConfig else { return }
+                        self.log("🔄 Auto-restarting miner now…")
+                        self.startPool(
+                            coin: cfg.coin,
+                            userAddress: cfg.userAddress,
+                            pool: cfg.pool,
+                            customHost: cfg.customHost,
+                            customPort: cfg.customPort,
+                            customAlgo: cfg.customAlgo,
+                            workerName: cfg.workerName,
+                            xmrigPath: cfg.xmrigPath,
+                            pbcminerPath: cfg.pbcminerPath,
+                            seinePath: cfg.seinePath,
+                            parano1dPath: cfg.parano1dPath
+                        )
+                    }
+                } else {
                     self.isRunning = false
                 }
             }
@@ -546,9 +635,30 @@ final class MinerManager: ObservableObject {
         } catch {
             let msg = error.localizedDescription
             log("ERROR: \(msg)")
-            DispatchQueue.main.async {
+            DispatchQueue.main.async { [weak self] in
+                guard let self = self else { return }
                 self.hashRate = "Error: \(msg)"
                 self.isRunning = false
+                if !self.isIntentionalStop && self.autoRestart {
+                    self.log("⚠️ Process launch failed. Retrying in 5 seconds…")
+                    self.restartTimer?.invalidate()
+                    self.restartTimer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: false) { [weak self] _ in
+                        guard let self = self, !self.isIntentionalStop, let cfg = self.lastSessionConfig else { return }
+                        self.startPool(
+                            coin: cfg.coin,
+                            userAddress: cfg.userAddress,
+                            pool: cfg.pool,
+                            customHost: cfg.customHost,
+                            customPort: cfg.customPort,
+                            customAlgo: cfg.customAlgo,
+                            workerName: cfg.workerName,
+                            xmrigPath: cfg.xmrigPath,
+                            pbcminerPath: cfg.pbcminerPath,
+                            seinePath: cfg.seinePath,
+                            parano1dPath: cfg.parano1dPath
+                        )
+                    }
+                }
             }
             return
         }

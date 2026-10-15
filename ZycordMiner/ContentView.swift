@@ -1249,6 +1249,16 @@ struct ContentView: View {
 
                     Spacer()
 
+                    Toggle(isOn: $miner.autoRestart) {
+                        Label("Auto-Restart if Stopped", systemImage: "arrow.clockwise")
+                            .font(.system(size: 11, weight: .medium))
+                    }
+                    .toggleStyle(.checkbox)
+                    .foregroundStyle(.green)
+                    .help("Automatically restarts mining within 3 seconds if disconnected or stopped unexpectedly.")
+
+                    Spacer()
+
                     if !miner.isRunning {
                         Button { startMining() } label: {
                             Label("Start Mining \(ui.selectedCoin.symbol)", systemImage: "play.fill")
