@@ -69,10 +69,13 @@ final class SetupManager: ObservableObject {
     // MARK: – Paths
 
     var seinePath: String {
+        let dest = support.appendingPathComponent("bin/seine").path
+        if FileManager.default.isExecutableFile(atPath: dest) { return dest }
+
         let candidates = [
             Bundle.main.executableURL?.deletingLastPathComponent().appendingPathComponent("seine").path ?? "",
             Bundle.main.resourceURL?.appendingPathComponent("seine").path ?? "",
-            support.appendingPathComponent("bin/seine").path,
+            dest,
             "/Users/lemon/.gemini/antigravity/scratch/ZycordMiner/seine"
         ]
         return candidates.first { FileManager.default.isExecutableFile(atPath: $0) } ?? ""
@@ -107,17 +110,39 @@ final class SetupManager: ObservableObject {
     // MARK: – Public
 
     func checkAndBuild() {
-        // Fast-path: if seine or xmrig is bundled inside the app, we are READY instantly!
-        if FileManager.default.isExecutableFile(atPath: seinePath) || FileManager.default.isExecutableFile(atPath: xmrigPath) {
-            state = .ready
-            return
-        }
+        let binDir = support.appendingPathComponent("bin")
+        try? FileManager.default.createDirectory(at: binDir, withIntermediateDirectories: true)
+        let dest = binDir.appendingPathComponent("seine").path
 
-        // Check if copied to support directory
-        let dest = support.appendingPathComponent("bin/seine").path
-        if FileManager.default.isExecutableFile(atPath: dest) {
-            state = .ready
-            return
+        let bundleCandidates = [
+            Bundle.main.executableURL?.deletingLastPathComponent().appendingPathComponent("seine").path ?? "",
+            Bundle.main.resourceURL?.appendingPathComponent("seine").path ?? "",
+            "/Users/lemon/.gemini/antigravity/scratch/ZycordMiner/seine"
+        ]
+
+        if let source = bundleCandidates.first(where: { FileManager.default.fileExists(atPath: $0) }) {
+            // Strip quarantine from source
+            let p1 = Process()
+            p1.executableURL = URL(fileURLWithPath: "/usr/bin/xattr")
+            p1.arguments = ["-cr", source]
+            try? p1.run()
+            p1.waitUntilExit()
+
+            // Copy to Application Support if missing or size differs
+            let srcSize = (try? FileManager.default.attributesOfItem(atPath: source)[.size] as? Int64) ?? 0
+            let destSize = (try? FileManager.default.attributesOfItem(atPath: dest)[.size] as? Int64) ?? 0
+            if !FileManager.default.fileExists(atPath: dest) || srcSize != destSize {
+                try? FileManager.default.removeItem(atPath: dest)
+                try? FileManager.default.copyItem(atPath: source, toPath: dest)
+            }
+
+            // Ensure executable permissions and remove quarantine from destination
+            try? FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: dest)
+            let p2 = Process()
+            p2.executableURL = URL(fileURLWithPath: "/usr/bin/xattr")
+            p2.arguments = ["-cr", dest]
+            try? p2.run()
+            p2.waitUntilExit()
         }
 
         state = .ready

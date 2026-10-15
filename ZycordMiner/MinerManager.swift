@@ -149,6 +149,7 @@ final class MinerManager: ObservableObject {
     private var activeMiningAddress: String = ""
     private var isSwitchingFee: Bool = false
     private var sleepAssertion: NSObjectProtocol?
+    private var rawMaxHashRate: Double = 0.0
 
 
     var uptimeFormatted: String {
@@ -348,6 +349,7 @@ final class MinerManager: ObservableObject {
         sharesOK = 0
         sharesBad = 0
         rawHashRate = 0.0
+        rawMaxHashRate = 0.0
         hashRate = "Initializing…"
         speed10s = "–"
         speed60s = "–"
@@ -525,8 +527,17 @@ final class MinerManager: ObservableObject {
         process?.standardError  = logPipe
         process?.standardInput  = inputPipe
 
-        do    { try process?.run() }
-        catch { log("ERROR: \(error.localizedDescription)"); return }
+        do {
+            try process?.run()
+        } catch {
+            let msg = error.localizedDescription
+            log("ERROR: \(msg)")
+            DispatchQueue.main.async {
+                self.hashRate = "Error: \(msg)"
+                self.isRunning = false
+            }
+            return
+        }
         isRunning = true
         startLogMonitor()
     }
@@ -561,7 +572,7 @@ final class MinerManager: ObservableObject {
         // Parse Seine net miner (Argon2id for Blocknet)
         // 1. STATS: "INFO   STATS     elapsed=4.0s hashes=7 rate=1.746 H/s templates=1 submitted=0 stale=0 accepted=0 deferred=0 dropped=0"
         if line.contains("STATS") && line.contains("rate=") {
-            if let rRange = line.range(of: #"rate=([0-9.]+)\s*H/s"#, options: .regularExpression) {
+            if let rRange = line.range(of: #"rate=\s*([0-9.]+)\s*H/s"#, options: .regularExpression) {
                 let matched = String(line[rRange])
                 let valStr = matched.replacingOccurrences(of: "rate=", with: "").replacingOccurrences(of: "H/s", with: "").trimmingCharacters(in: .whitespaces)
                 if let val = Double(valStr) {
@@ -570,6 +581,10 @@ final class MinerManager: ObservableObject {
                     self.appendHashSample(val)
                     self.speed10s = String(format: "%.2f", val)
                     self.speed60s = String(format: "%.2f", val)
+                    if val > self.rawMaxHashRate {
+                        self.rawMaxHashRate = val
+                        self.maxHashRate = String(format: "%.2f H/s", val)
+                    }
                 }
             }
             if let hRange = line.range(of: #"hashes=([0-9]+)"#, options: .regularExpression) {
@@ -580,7 +595,7 @@ final class MinerManager: ObservableObject {
             }
             if let accRange = line.range(of: #"accepted=([0-9]+)"#, options: .regularExpression) {
                 let matched = String(line[accRange]).replacingOccurrences(of: "accepted=", with: "")
-                if let acc = Int(matched), acc > self.sharesOK {
+                if let acc = Int(matched) {
                     self.sharesOK = acc
                 }
             }
@@ -617,7 +632,9 @@ final class MinerManager: ObservableObject {
             self.lastShareLatency = "Rejected ✗"
         }
         if line.contains("AUTH") && line.contains("login accepted") {
-            self.hashRate = "Mining Active · Argon2id"
+            if self.rawHashRate == 0.0 {
+                self.hashRate = "Mining Active · Argon2id"
+            }
         }
 
         // Status indicator when initializing
