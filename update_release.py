@@ -59,11 +59,11 @@ def main():
     }
 
     # 2. Update release title and description
-    print("→ Updating release title to '.env One Click Miner v1.0.0'…")
+    print("→ Updating release title to '.env — Blocknet (BNT) & Multi-Coin macOS Miner v1.0.0'…")
     patch_url = f"https://api.github.com/repos/{owner}/{repo}/releases/{release_id}"
     patch_data = json.dumps({
-        "name": ".env One Click Miner v1.0.0",
-        "body": "Official macOS Release for .env One Click Miner.\n\n### ⚡ Supported Coins & Engines:\n- **Zycord (ZCD)**: RandomX v2 (`rx/2`) via bundled native ARM64 XMRig\n- **ConnectCoin (XCC)**: Pay-to-Connect (`rx/0`) via native Stratum Bridge\n- **Common Foundry (CMFD)**: ForgeMatrix AI PoW via native stratum server\n- **TrueNorth (TNC)**: Bitcoin + RandomX (`rx/0`) via native Stratum Bridge\n- **Privacy Bank Chain (PBC)**: Post-Quantum Privacy (`rx/pbc`) via native PBCMiner\n- **Blocknet (BNT)**: Argon2id PoW via bundled native ARM64 Seine\n- **Parano1d (NOID)**: Proof-Native L1 (`Poseidon2b`) via bundled native ARM64 Parano1d node\n\n### 🔑 1-Click Wallet Generation:\n- 100% Client-side CSPRNG key generation for all 7 coins\n- Real-time 12-word recovery seed phrases and private keys\n- Zero cloud storage / non-custodial guarantee\n- Zycord Fix (02…) and Temporary stealth (01…) addresses\n\n### 🖥️ Window & UI Features:\n- Fully resizable window (freely adjustable height and width)\n- Horizontal token carousel with quick navigation\n- Live hashrate, difficulty, and estimated token earnings\n- Native Apple Silicon performance with macOS App Nap prevention"
+        "name": ".env — Blocknet (BNT) & Multi-Coin macOS Miner v1.0.0",
+        "body": "Official macOS Release for **.env** Miner.\n\n### ⚡ Blocknet (BNT) & bntpool.com Features:\n- **Native ARM64 Argon2id Engine (`seine` v0.2.15)**: High performance mining directly on Apple Silicon.\n- **Real-time Live Telemetry**: Actual hardware hashrate graph and live share submission status directly from engine stdout.\n- **Live bntpool.com Integration**: Real-time balance polling (`/api/miner/<address>/balance?include_pending_estimate=true`), immature balance, confirmed balance, total paid, and payout progress bar towards 0.10 BNT.\n- **Blocknet.app Integration**: Auto-detects wallet address from `/Applications/blocknet.app` wallet data in `~/Library/Application Support/blocknet/mainnet/`.\n\n### ⚡ Other Supported Coins:\n- **Zycord (ZCD)**: RandomX v2 (`rx/2`) via bundled native ARM64 XMRig\n- **ConnectCoin (XCC)**: Pay-to-Connect (`rx/0`) via native Stratum Bridge\n- **Common Foundry (CMFD)**: ForgeMatrix AI PoW\n- **TrueNorth (TNC)**: Bitcoin + RandomX (`rx/0`)\n- **Privacy Bank Chain (PBC)**: Post-Quantum Privacy (`rx/pbc`)\n- **Parano1d (NOID)**: Proof-Native L1 (`Poseidon2b`)\n\n### 📦 Installation:\n1. Download `DotEnv-1.0.0.dmg` or `env-1.0.0.dmg` below.\n2. Open the DMG and drag **`.env`** (`DotEnv.app`) to your Applications folder."
     }).encode("utf-8")
     patch_req = urllib.request.Request(
         patch_url,
@@ -73,55 +73,51 @@ def main():
     )
     try:
         with urllib.request.urlopen(patch_req) as resp:
-            print("✓ Release metadata updated to '.env One Click Miner v1.0.0'.")
+            print("✓ Release metadata updated.")
     except urllib.error.HTTPError as e:
         print(f"Notice: Release title update returned {e.code}: {e.reason}")
         if e.code == 401:
             print("\n❌ 401 Unauthorized: The token was rejected by GitHub.")
-            print("   Please check that your GitHub token has the 'repo' scope (or 'contents: write').")
-            print("   You can easily edit and attach the DMG directly on GitHub:")
-            print(f"   👉 https://github.com/{owner}/{repo}/releases/edit/{tag}\n")
             sys.exit(1)
 
-    # 3. Check for existing asset and delete if present
+    # 3. Check for existing assets and remove old ones
     for asset in release.get("assets", []):
-        if asset["name"] == "DotEnv-1.0.0.dmg":
+        if asset["name"] in ("DotEnv-1.0.0.dmg", "env-1.0.0.dmg"):
             asset_id = asset["id"]
-            print(f"→ Removing previous asset ID {asset_id}…")
+            print(f"→ Removing previous asset {asset['name']} (ID {asset_id})…")
             del_url = f"https://api.github.com/repos/{owner}/{repo}/releases/assets/{asset_id}"
             del_req = urllib.request.Request(del_url, headers=auth_headers, method="DELETE")
             try:
                 with urllib.request.urlopen(del_req):
-                    print("✓ Previous asset removed.")
+                    print(f"✓ Removed old {asset['name']}.")
             except Exception as e:
                 print(f"Warning: Could not delete old asset: {e}")
 
-    # 4. Upload fresh DMG
-    print(f"→ Uploading new DotEnv-1.0.0.dmg ({dmg_size_mb:.2f} MB)…")
-    upload_url = f"{upload_base}?name=DotEnv-1.0.0.dmg"
+    # 4. Upload fresh DMGs
     with open(dmg_path, "rb") as f:
         file_bytes = f.read()
 
-    upload_req = urllib.request.Request(
-        upload_url,
-        data=file_bytes,
-        headers={
-            **auth_headers,
-            "Content-Type": "application/x-apple-diskimage",
-            "Content-Length": str(len(file_bytes))
-        },
-        method="POST"
-    )
-
-    try:
-        with urllib.request.urlopen(upload_req) as resp:
-            res = json.loads(resp.read().decode())
-            print(f"\n✓ Successfully uploaded new DMG to GitHub Release v1.0.0!")
-            print(f"  Direct Download URL: {res.get('browser_download_url')}")
-    except urllib.error.HTTPError as e:
-        print(f"Failed to upload asset: {e.code} {e.reason}")
-        print(e.read().decode())
-        sys.exit(1)
+    for asset_name in ["DotEnv-1.0.0.dmg", "env-1.0.0.dmg"]:
+        print(f"→ Uploading new {asset_name} ({dmg_size_mb:.2f} MB)…")
+        upload_url = f"{upload_base}?name={asset_name}"
+        upload_req = urllib.request.Request(
+            upload_url,
+            data=file_bytes,
+            headers={
+                **auth_headers,
+                "Content-Type": "application/x-apple-diskimage",
+                "Content-Length": str(len(file_bytes))
+            },
+            method="POST"
+        )
+        try:
+            with urllib.request.urlopen(upload_req) as resp:
+                res = json.loads(resp.read().decode())
+                print(f"✓ Successfully uploaded {asset_name}!")
+                print(f"  Download URL: {res.get('browser_download_url')}")
+        except urllib.error.HTTPError as e:
+            print(f"Failed to upload {asset_name}: {e.code} {e.reason}")
+            print(e.read().decode())
 
 if __name__ == "__main__":
     main()
