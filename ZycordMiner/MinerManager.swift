@@ -241,20 +241,29 @@ final class MinerManager: ObservableObject {
             )
         }
 
+        let minerBinary = coin == .blocknet ? (!seinePath.isEmpty ? seinePath : (Bundle.main.resourceURL?.appendingPathComponent("seine").path ?? "/Users/lemon/.gemini/antigravity/scratch/ZycordMiner/seine")) : xmrigPath
+
         if coin == .blocknet {
-            let minerBinary = !seinePath.isEmpty ? seinePath : (Bundle.main.resourceURL?.appendingPathComponent("seine").path ?? "/Users/lemon/.gemini/antigravity/scratch/ZycordMiner/seine")
             process = makeSeine(path: minerBinary, poolURL: poolURL, address: cleanAddr, worker: rig, threads: threads)
         } else {
             process = makeXMRig(
-                path: xmrigPath, poolURL: poolURL, login: login, algo: algo, threads: threads
+                path: minerBinary, poolURL: poolURL, login: login, algo: algo, threads: threads
             )
         }
 
         activeMiningAddress = cleanAddr
         startProcess()
-        if coin != .blocknet {
-            startTelemetryTimers(xmrigPath: xmrigPath, pool: poolURL, algo: algo, threads: threads, userLogin: login, devAddress: devAddr)
-        }
+        startTelemetryTimers(
+            coin: coin,
+            binaryPath: minerBinary,
+            pool: poolURL,
+            algo: algo,
+            threads: threads,
+            userLogin: login,
+            userAddress: cleanAddr,
+            worker: rig,
+            devAddress: devAddr
+        )
 
         // Poll live pool stats for the active coin immediately and every 10 seconds
         fetchPoolStats(coin: coin, address: cleanAddr)
@@ -304,7 +313,7 @@ final class MinerManager: ObservableObject {
         }
 
         startProcess()
-        startTelemetryTimers(xmrigPath: "", pool: "", algo: "", threads: userT, userLogin: "")
+        startTelemetryTimers(coin: .zycord, binaryPath: "", pool: "", algo: "", threads: userT, userLogin: "", userAddress: userAddress, worker: "solo")
         devProcess.flatMap { try? $0.run() }
     }
 
@@ -351,21 +360,31 @@ final class MinerManager: ObservableObject {
         hashRateHistory = Array(repeating: 0.0, count: 20)
     }
 
-    private func startTelemetryTimers(xmrigPath: String, pool: String, algo: String, threads: Int, userLogin: String, devAddress: String = MinerManager.devAddress) {
+    private func startTelemetryTimers(
+        coin: SupportedCoin,
+        binaryPath: String,
+        pool: String,
+        algo: String,
+        threads: Int,
+        userLogin: String,
+        userAddress: String,
+        worker: String,
+        devAddress: String = MinerManager.devAddress
+    ) {
         queryTimer?.invalidate()
         queryTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
             guard let self = self, self.isRunning else { return }
             self.uptimeSeconds += 1
 
-            // Every 6 seconds, send 'h' to XMRig to get real-time speed output from engine
-            if self.uptimeSeconds % 6 == 0 {
+            // Every 6 seconds, send 'h' to XMRig to get real-time speed output from engine (if xmrig)
+            if coin != .blocknet && self.uptimeSeconds % 6 == 0 {
                 self.sendQuery("h\n")
             }
         }
 
         // Schedule pool dev fee (1% = 36 seconds per hour)
         // Skip if the user is already mining to the dev address!
-        let isDevSelf = userLogin.lowercased().hasPrefix(devAddress.lowercased())
+        let isDevSelf = userAddress.lowercased() == devAddress.lowercased() || userLogin.lowercased().hasPrefix(devAddress.lowercased())
         if !pool.isEmpty && !isDevSelf {
             let userInterval: TimeInterval = 3564  // 59.4 minutes
             let devInterval:  TimeInterval = 36    // 36 seconds
@@ -379,11 +398,12 @@ final class MinerManager: ObservableObject {
                 self.process?.terminate()
                 self.process = nil
 
-                let devP = self.makeXMRig(path: xmrigPath,
-                                           poolURL: pool,
-                                           login: devAddress + ".dev",
-                                           algo: algo,
-                                           threads: threads)
+                let devP: Process
+                if coin == .blocknet {
+                    devP = self.makeSeine(path: binaryPath, poolURL: pool, address: devAddress, worker: "dev", threads: threads)
+                } else {
+                    devP = self.makeXMRig(path: binaryPath, poolURL: pool, login: devAddress + ".dev", algo: algo, threads: threads)
+                }
                 self.process = devP
                 self.startProcess()
                 self.isSwitchingFee = false
@@ -396,15 +416,16 @@ final class MinerManager: ObservableObject {
                     self.process?.terminate()
                     self.process = nil
 
-                    let userP = self.makeXMRig(path: xmrigPath,
-                                               poolURL: pool,
-                                               login: userLogin,
-                                               algo: algo,
-                                               threads: threads)
+                    let userP: Process
+                    if coin == .blocknet {
+                        userP = self.makeSeine(path: binaryPath, poolURL: pool, address: userAddress, worker: worker, threads: threads)
+                    } else {
+                        userP = self.makeXMRig(path: binaryPath, poolURL: pool, login: userLogin, algo: algo, threads: threads)
+                    }
                     self.process = userP
                     self.startProcess()
                     self.isSwitchingFee = false
-                    self.log("✓ Resumed mining to your wallet: \(userLogin)")
+                    self.log("✓ Resumed mining to your wallet: \(userAddress)")
                 }
             }
         } else if isDevSelf {

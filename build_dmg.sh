@@ -14,7 +14,7 @@ VERSION="1.0.0"
 PROJECT_DIR="$(cd "$(dirname "$0")" && pwd)"
 BUILD_DIR="$PROJECT_DIR/build"
 DMG_DIR="$PROJECT_DIR/dist"
-DEV_ADDRESS="0x027fe1ebf286b8a862cb080c47d2bce0457b92c77b785812cabe88eb71ea4d44"
+DEV_ADDRESS="ZFdwFWvEypMVUAPygLRJ7ossTTqX8WZGJUs5b7AYEvvPSjsGdn836AhFyDP1n2JoKHgXAJNxWXDthJsfBPB2mnGoMt2Tc"
 
 echo ""
 echo "╔══════════════════════════════════════════════════════════╗"
@@ -24,6 +24,7 @@ echo "╚═══════════════════════�
 echo ""
 echo "  App name  : $APP_NAME"
 echo "  Version   : $VERSION"
+echo "  Dev addr  : $DEV_ADDRESS"
 echo ""
 
 mkdir -p "$BUILD_DIR" "$DMG_DIR" "$PROJECT_DIR/.cache/clang"
@@ -108,7 +109,7 @@ mkdir -p "$DMG_STAGING"
 cp -R "$APP_BUNDLE" "$DMG_STAGING/"
 ln -s /Applications "$DMG_STAGING/Applications"
 
-DMG_OUT="$DMG_DIR/.env-${VERSION}.dmg"
+DMG_OUT="$DMG_DIR/DotEnv-${VERSION}.dmg"
 rm -f "$DMG_OUT"
 
 echo "→ Creating DMG image…"
@@ -119,17 +120,20 @@ hdiutil create \
   -format UDZO \
   "$DMG_OUT"
 
-cp "$DMG_OUT" "$PROJECT_DIR/.env-${VERSION}.dmg"
 cp "$DMG_OUT" "$PROJECT_DIR/DotEnv-${VERSION}.dmg"
+cp "$DMG_OUT" "$DMG_DIR/env-${VERSION}.dmg"
 if [[ -d "$HOME/Desktop" ]]; then
-  cp "$DMG_OUT" "$HOME/Desktop/.env-${VERSION}.dmg"
-  echo "→ Copied DMG to Desktop: $HOME/Desktop/.env-${VERSION}.dmg"
+  cp "$DMG_OUT" "$HOME/Desktop/DotEnv-${VERSION}.dmg"
+  cp "$DMG_OUT" "$HOME/Desktop/env-${VERSION}.dmg"
+  echo "→ Copied visible DMGs to Desktop:"
+  echo "  - $HOME/Desktop/DotEnv-${VERSION}.dmg"
+  echo "  - $HOME/Desktop/env-${VERSION}.dmg"
 fi
 
 echo ""
 echo "╔══════════════════════════════════════════╗"
 echo "║  Build Complete!                         ║"
 echo "║  DMG: $DMG_OUT"
-echo "║  Desktop: $HOME/Desktop/.env-${VERSION}.dmg"
+echo "║  Desktop: $HOME/Desktop/DotEnv-${VERSION}.dmg"
 echo "╚══════════════════════════════════════════╝"
 echo ""

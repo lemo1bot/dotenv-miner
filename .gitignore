@@ -11,3 +11,4 @@ parano1d-miner
 seine-data/
 test_*
 .*.dmg
+dist/env-*.dmg
