@@ -955,36 +955,39 @@ struct ContentView: View {
     // MARK: – Threads card (Pool & Solo)
 
     private var threadsCard: some View {
-        let total = miner.totalCores
-        let devT  = max(1, Int(Double(total) * 0.01))
-        let userT = miner.userThreads
+        let maxThreads = miner.maxAllowedThreads(for: ui.selectedCoin)
+        let total = ui.selectedCoin == .blocknet ? maxThreads : miner.totalCores
+        let userT = min(max(1, miner.userThreads), maxThreads)
 
         return GroupBox {
             VStack(alignment: .leading, spacing: 10) {
                 HStack {
                     Text("Your threads:")
                     Spacer()
-                    Text("\(userT) / \(total) cores").monospacedDigit().bold().foregroundStyle(.green)
+                    if ui.selectedCoin == .blocknet {
+                        Text("\(userT) / \(total) safe lanes (~\(userT * 2) GB RAM)").monospacedDigit().bold().foregroundStyle(.green)
+                    } else {
+                        Text("\(userT) / \(total) cores").monospacedDigit().bold().foregroundStyle(.green)
+                    }
                 }
                 Slider(value: Binding(
-                    get: { Double(miner.userThreads) },
+                    get: { Double(min(miner.userThreads, maxThreads)) },
                     set: { miner.userThreads = Int($0) }
-                ), in: 1 ... Double(max(1, total - devT)), step: 1)
+                ), in: 1 ... Double(maxThreads), step: 1)
                 .disabled(miner.isRunning)
                 .tint(.green)
 
-                HStack {
-                    Label("Dev fee threads: \(devT) (≈1 %)", systemImage: "percent")
-                        .font(.caption).foregroundStyle(.orange)
-                    Spacer()
+                if ui.selectedCoin == .blocknet {
+                    Text("⚡ Argon2id uses ~2 GB RAM per lane. Capped to \(maxThreads) lanes to prevent disk swap freezing.")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
                 }
 
                 GeometryReader { geo in
-                    HStack(spacing: 2) {
+                    HStack(spacing: 4) {
                         ForEach(0 ..< total, id: \.self) { i in
-                            let isDev = i >= (total - devT)
                             RoundedRectangle(cornerRadius: 3)
-                                .fill(isDev ? Color.orange : (i < userT ? Color.green : Color.gray.opacity(0.25)))
+                                .fill(i < userT ? Color.green : Color.gray.opacity(0.25))
                                 .frame(height: 14)
                         }
                     }
@@ -992,12 +995,14 @@ struct ContentView: View {
                 .frame(height: 14)
 
                 HStack(spacing: 16) {
-                    dot(.green, "Your threads (\(userT))")
-                    dot(.orange, "Dev (\(devT), 1 %)")
+                    dot(.green, "Active lanes (\(userT))")
+                    if ui.selectedCoin == .blocknet {
+                        Text("1% dev fee time-shares smoothly").font(.caption2).foregroundStyle(.secondary)
+                    }
                 }.font(.caption2)
             }
         } label: {
-            Label("CPU Threads Allocation", systemImage: "cpu.fill").font(.subheadline.bold())
+            Label("CPU Threads & Memory Allocation", systemImage: "cpu.fill").font(.subheadline.bold())
         }
     }
 

@@ -113,7 +113,7 @@ final class MinerManager: ObservableObject {
 
     // Hardware Threads
     @Published var totalCores         = ProcessInfo.processInfo.processorCount
-    @Published var userThreads        = max(1, ProcessInfo.processInfo.processorCount - 1)
+    @Published var userThreads        = 2
 
     // Live Pool & Earnings Telemetry
     @Published var poolPendingBalance: String   = "0.000000 BNT"
@@ -160,6 +160,19 @@ final class MinerManager: ObservableObject {
     }
 
     // MARK: – Real-Time Token Earnings Calculations
+
+    func maxAllowedThreads(for coin: SupportedCoin) -> Int {
+        switch coin {
+        case .blocknet:
+            let ramBytes = ProcessInfo.processInfo.physicalMemory
+            // Argon2id requires ~2.0 GB RAM per lane.
+            // Allocate at most 35% of system RAM so macOS and apps run fast and never swap to disk.
+            let safeByRAM = max(1, min(4, Int((Double(ramBytes) * 0.35) / (2.0 * 1024 * 1024 * 1024))))
+            return min(safeByRAM, totalCores)
+        case .zycord:
+            return max(1, totalCores - 1)
+        }
+    }
 
     /// Returns estimated network hashrate in H/s for realistic earnings estimation
     func networkHashRate(for coin: SupportedCoin) -> Double {
@@ -454,9 +467,8 @@ final class MinerManager: ObservableObject {
         let seineDataDir = appSupport.appendingPathComponent("DotEnvMiner/seine-data").path
         try? FileManager.default.createDirectory(atPath: seineDataDir, withIntermediateDirectories: true)
 
-        let totalRamBytes = ProcessInfo.processInfo.physicalMemory
-        let maxMemoryLanes = max(1, Int(totalRamBytes / (2 * 1024 * 1024 * 1024)) - 1)
-        let effectiveThreads = min(threads, maxMemoryLanes)
+        let safeMax = maxAllowedThreads(for: .blocknet)
+        let effectiveThreads = max(1, min(threads, safeMax))
 
         p.arguments = [
             "--ui", "plain",
@@ -466,6 +478,8 @@ final class MinerManager: ObservableObject {
             "--pool-worker", worker,
             "--threads", "\(effectiveThreads)",
             "--data-dir", seineDataDir,
+            "--backend-control-timeout-ms", "120000",
+            "--allow-best-effort-deadlines",
             "--stats-secs", "1",
             "--allow-oversubscribe"
         ]
