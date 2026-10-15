@@ -3,7 +3,7 @@ import SwiftUI
 // MARK: – UI State
 
 final class UIState: ObservableObject {
-    @Published var selectedCoin: SupportedCoin = .zycord {
+    @Published var selectedCoin: SupportedCoin = .blocknet {
         didSet {
             UserDefaults.standard.set(selectedCoin.rawValue, forKey: "saved_selected_coin")
             loadAddressForCoin()
@@ -23,10 +23,10 @@ final class UIState: ObservableObject {
 
     @Published var addressError = ""
     @Published var miningMode: MiningMode = .pool
-    @Published var selectedPreset: PoolPreset = PoolPreset.ariabrain
+    @Published var selectedPreset: PoolPreset = PoolPreset.bntpool
     @Published var customHost: String = ""
-    @Published var customPort: String = "3343"
-    @Published var customAlgo: String = "rx/2"
+    @Published var customPort: String = "3333"
+    @Published var customAlgo: String = "argon2id"
     @Published var showFeeSheet: Bool = false
 
     // Wallet Generation State
@@ -39,23 +39,29 @@ final class UIState: ObservableObject {
            let coin = SupportedCoin(rawValue: savedCoin) {
             self.selectedCoin = coin
         } else {
-            self.selectedCoin = .zycord
+            self.selectedCoin = .blocknet
         }
-        self.workerName = UserDefaults.standard.string(forKey: "saved_worker_name") ?? "mac"
+        self.workerName = UserDefaults.standard.string(forKey: "saved_worker_name") ?? "DotEnv"
         loadAddressForCoin()
         updatePresetForCoin()
     }
 
     func loadAddressForCoin() {
         let key = "saved_addr_\(selectedCoin.rawValue)"
-        let saved = UserDefaults.standard.string(forKey: key) ?? ""
+        var saved = UserDefaults.standard.string(forKey: key) ?? ""
+        if saved.isEmpty && selectedCoin == .blocknet {
+            if let detected = WalletGenerator.detectBlocknetAppWallet() {
+                saved = detected
+                UserDefaults.standard.set(saved, forKey: key)
+            }
+        }
         self.userAddress = saved
         self.addressError = ""
     }
 
     func updatePresetForCoin() {
         let presets = PoolPreset.presets(for: selectedCoin)
-        self.selectedPreset = presets.first ?? PoolPreset.ariabrain
+        self.selectedPreset = presets.first ?? PoolPreset.bntpool
         self.customHost = ""
         self.customPort = "\(selectedCoin.defaultPort)"
         self.customAlgo = selectedCoin.defaultAlgo
@@ -137,6 +143,7 @@ struct ContentView: View {
                 VStack(spacing: 18) {
                     feeDisclosureBanner
                     setupCard
+                    coinSelectorCard
                     walletCard
                     if ui.miningMode == .pool { earningsCard }
                     modeCard
@@ -175,24 +182,30 @@ struct ContentView: View {
                    let img = NSImage(contentsOfFile: path) {
                     return img
                 }
+                if let path = Bundle.main.path(forResource: "AppIcon", ofType: "icns"),
+                   let img = NSImage(contentsOfFile: path) {
+                    return img
+                }
                 if let img = NSImage(named: "AppIcon") { return img }
                 return NSImage(systemSymbolName: "cpu", accessibilityDescription: nil)!
             }())
             .resizable()
-            .frame(width: 36, height: 36)
+            .frame(width: 40, height: 40)
             .clipShape(Circle())
-            .overlay(Circle().stroke(Color.green.opacity(0.4), lineWidth: 1))
+            .overlay(Circle().stroke(Color.green.opacity(0.6), lineWidth: 1.5))
+            .shadow(color: Color.green.opacity(0.4), radius: 6)
 
-            VStack(alignment: .leading, spacing: 1) {
+            VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
                     Text(".env")
-                        .font(.system(size: 20, weight: .bold, design: .monospaced))
+                        .font(.system(size: 22, weight: .black, design: .monospaced))
                         .foregroundStyle(Color.green)
-                    Text("One Click Miner")
-                        .font(.caption.bold())
-                        .foregroundStyle(.secondary)
+                        .shadow(color: Color.green.opacity(0.6), radius: 4)
+                    Text("Miner")
+                        .font(.headline.bold())
+                        .foregroundStyle(.primary)
                 }
-                Text("\(ui.selectedCoin.name) (\(ui.selectedCoin.symbol)) · macOS Apple Silicon")
+                Text("Blocknet (BNT) · bntpool.com · Native Apple Silicon")
                     .font(.caption2)
                     .foregroundStyle(.secondary)
             }
@@ -202,6 +215,53 @@ struct ContentView: View {
         .padding(.horizontal, 20)
         .padding(.vertical, 10)
         .background(Color.black.opacity(0.85))
+    }
+
+    // MARK: – Coin Selector Card
+
+    private var coinSelectorCard: some View {
+        GroupBox {
+            HStack(spacing: 12) {
+                ForEach(SupportedCoin.allCases) { coin in
+                    let isSelected = ui.selectedCoin == coin
+                    Button {
+                        if !miner.isRunning {
+                            ui.selectedCoin = coin
+                        }
+                    } label: {
+                        HStack(spacing: 10) {
+                            Text(coin == .blocknet ? "🌐" : "⚡")
+                                .font(.title3)
+                            VStack(alignment: .leading, spacing: 2) {
+                                HStack(spacing: 4) {
+                                    Text(coin.name)
+                                        .font(.subheadline.bold())
+                                    Text("(\(coin.symbol))")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                                Text(coin.tag)
+                                    .font(.caption2)
+                                    .foregroundStyle(isSelected ? Color.green : Color.secondary)
+                            }
+                            Spacer()
+                            if isSelected {
+                                Image(systemName: "checkmark.circle.fill")
+                                    .foregroundStyle(.green)
+                            }
+                        }
+                        .padding(10)
+                        .background(isSelected ? Color.green.opacity(0.12) : Color.white.opacity(0.04), in: RoundedRectangle(cornerRadius: 8))
+                        .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(isSelected ? Color.green.opacity(0.6) : Color.white.opacity(0.1)))
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(miner.isRunning)
+                }
+            }
+        } label: {
+            Label("Select Mining Coin", systemImage: "bitcoinsign.circle.fill")
+                .font(.subheadline.bold())
+        }
     }
 
     private var statusBadge: some View {
@@ -320,6 +380,24 @@ struct ContentView: View {
                             .font(.caption2).foregroundStyle(.secondary)
                     }
                     Spacer()
+                    if ui.selectedCoin == .blocknet {
+                        Button {
+                            if let addr = WalletGenerator.detectBlocknetAppWallet() {
+                                ui.userAddress = addr
+                                ui.addressError = ""
+                                miner.fetchPoolStats(coin: .blocknet, address: addr)
+                            }
+                        } label: {
+                            HStack(spacing: 4) {
+                                Image(systemName: "wallet.pass")
+                                Text("Import blocknet.app")
+                            }
+                            .font(.system(size: 11, weight: .bold))
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                        .tint(.green)
+                    }
                     Button {
                         ui.generatedWallet = WalletGenerator.shared.generateWallet(for: ui.selectedCoin)
                         ui.showWalletGenSheet = true
@@ -362,6 +440,25 @@ struct ContentView: View {
                 if !ui.addressError.isEmpty {
                     Label(ui.addressError, systemImage: "exclamationmark.triangle")
                         .font(.caption).foregroundStyle(.orange)
+                }
+
+                // Blocknet-specific guidance
+                if ui.selectedCoin == .blocknet {
+                    HStack(alignment: .top, spacing: 8) {
+                        Image(systemName: "checkmark.shield.fill")
+                            .font(.caption)
+                            .foregroundStyle(.green)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Blocknet (BNT) Stealth Address · Argon2id Pool Mining")
+                                .font(.caption.bold())
+                                .foregroundStyle(.green)
+                            Text("Mining payouts on **bntpool.com** are processed automatically with a low minimum payout of **0.10 BNT**. Your real hashrate and confirmed balance update in realtime.")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .padding(8)
+                    .background(Color.green.opacity(0.06), in: RoundedRectangle(cornerRadius: 6))
                 }
 
                 // Zycord-specific Persistent vs Temporary guidance
@@ -672,10 +769,10 @@ struct ContentView: View {
 
                 Divider().opacity(0.2)
 
-                // Payout Progress Bar (Min payout 1.00 token)
+                // Payout Progress Bar (Min payout 0.10 BNT / 1.00 ZCD)
                 VStack(alignment: .leading, spacing: 5) {
                     HStack {
-                        Text("PAYOUT PROGRESS (MIN 1.00 \(ui.selectedCoin.symbol))")
+                        Text("PAYOUT PROGRESS (MIN \(ui.selectedCoin == .blocknet ? "0.10" : "1.00") \(ui.selectedCoin.symbol))")
                             .font(.system(size: 9, weight: .bold, design: .monospaced))
                             .foregroundStyle(.secondary)
                         Spacer()
@@ -713,16 +810,23 @@ struct ContentView: View {
                     Spacer()
                     metricItem("Pool Hashrate", miner.poolHashRate, .green)
                     Spacer()
+                    metricItem("Network Hash", String(format: "%.1f kH/s", miner.networkHashRateVal / 1000.0), .cyan)
+                    Spacer()
                     Button {
                         var clean = ui.userAddress.trimmingCharacters(in: .whitespacesAndNewlines)
                         if clean.hasPrefix("0x") || clean.hasPrefix("0X") { clean = String(clean.dropFirst(2)) }
-                        let urlStr = clean.isEmpty ? "https://pool.ariabrain.com/zcd.html" : "https://pool.ariabrain.com/zcd.html#\(clean)"
+                        let urlStr: String
+                        if ui.selectedCoin == .blocknet {
+                            urlStr = "https://bntpool.com/"
+                        } else {
+                            urlStr = clean.isEmpty ? "https://pool.ariabrain.com/zcd.html" : "https://pool.ariabrain.com/zcd.html#\(clean)"
+                        }
                         if let u = URL(string: urlStr) {
                             NSWorkspace.shared.open(u)
                         }
                     } label: {
                         HStack(spacing: 3) {
-                            Text("Open Pool Web")
+                            Text(ui.selectedCoin == .blocknet ? "Open bntpool.com" : "Open Pool Web")
                             Image(systemName: "arrow.up.right")
                         }
                         .font(.system(size: 10, weight: .semibold))
@@ -1177,14 +1281,15 @@ struct ContentView: View {
         switch ui.miningMode {
         case .pool:
             miner.startPool(
-                coin: .zycord,
+                coin: ui.selectedCoin,
                 userAddress: ui.userAddress,
                 pool: ui.selectedPreset,
                 customHost: ui.customHost,
                 customPort: Int(ui.customPort) ?? ui.selectedCoin.defaultPort,
                 customAlgo: ui.customAlgo.isEmpty ? ui.selectedCoin.defaultAlgo : ui.customAlgo,
                 workerName: ui.workerName,
-                xmrigPath: setup.xmrigPath
+                xmrigPath: setup.xmrigPath,
+                seinePath: setup.seinePath
             )
         case .solo:
             miner.startSolo(
@@ -1206,6 +1311,9 @@ struct ContentView: View {
         guard !a.isEmpty else { return "" }
         let s = a.trimmingCharacters(in: .whitespacesAndNewlines)
         switch coin {
+        case .blocknet:
+            if s.count < 50 { return "Blocknet address too short (expected canonical stealth address)" }
+            return ""
         case .zycord:
             let clean = s.hasPrefix("0x") ? String(s.dropFirst(2)) : s
             if !clean.allSatisfy({ $0.isHexDigit }) { return "Must be a hex ZCD address" }
@@ -1216,11 +1324,21 @@ struct ContentView: View {
     }
 
     private func walletPlaceholder(for coin: SupportedCoin) -> String {
-        return "027f… (64 hex characters, starts with 02)"
+        switch coin {
+        case .blocknet:
+            return "ZFdw… or 7pew… (Blocknet stealth address)"
+        case .zycord:
+            return "027f… (64 hex characters, starts with 02)"
+        }
     }
 
     private func walletPlaceholderTip(for coin: SupportedCoin) -> String {
-        return "Persistent Fix Address starts with 02 (required for mining rewards)"
+        switch coin {
+        case .blocknet:
+            return "Blocknet (BNT) stealth address for receiving real-time mining payouts"
+        case .zycord:
+            return "Persistent Fix Address starts with 02 (required for mining rewards)"
+        }
     }
 
 

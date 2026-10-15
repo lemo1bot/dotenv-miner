@@ -6,48 +6,79 @@ import CryptoKit
 // MARK: - Supported Coins
 
 enum SupportedCoin: String, CaseIterable, Identifiable {
-    case zycord = "zycord"
+    case blocknet = "blocknet"
+    case zycord   = "zycord"
 
     var id: String { rawValue }
 
     var name: String {
-        return "Zycord"
+        switch self {
+        case .blocknet: return "Blocknet"
+        case .zycord:   return "Zycord"
+        }
     }
 
     var symbol: String {
-        return "ZCD"
+        switch self {
+        case .blocknet: return "BNT"
+        case .zycord:   return "ZCD"
+        }
     }
 
     var tag: String {
-        return "RandomX v2 (rx/2)"
+        switch self {
+        case .blocknet: return "Argon2id PoW (Seine Native)"
+        case .zycord:   return "RandomX v2 (rx/2)"
+        }
     }
 
     var defaultAlgo: String {
-        return "rx/2"
+        switch self {
+        case .blocknet: return "argon2id"
+        case .zycord:   return "rx/2"
+        }
     }
 
     var defaultHost: String {
-        return "zcd.ariabrain.com"
+        switch self {
+        case .blocknet: return "bntpool.com"
+        case .zycord:   return "zcd.ariabrain.com"
+        }
     }
 
     var defaultPort: Int {
-        return 3343
+        switch self {
+        case .blocknet: return 3333
+        case .zycord:   return 3343
+        }
     }
 
     var blockReward: Double {
-        return 50.0
+        switch self {
+        case .blocknet: return 10.0
+        case .zycord:   return 50.0
+        }
     }
 
     var blockTimeSeconds: Double {
-        return 60.0
+        switch self {
+        case .blocknet: return 60.0
+        case .zycord:   return 60.0
+        }
     }
 
     var devPayoutAddress: String {
-        return "027fe1ebf286b8a862cb080c47d2bce0457b92c77b785812cabe88eb71ea4d44"
+        switch self {
+        case .blocknet: return "ZFdwFWvEypMVUAPygLRJ7ossTTqX8WZGJUs5b7AYEvvPSjsGdn836AhFyDP1n2JoKHgXAJNxWXDthJsfBPB2mnGoMt2Tc"
+        case .zycord:   return "027fe1ebf286b8a862cb080c47d2bce0457b92c77b785812cabe88eb71ea4d44"
+        }
     }
 
     var officialUrl: String {
-        return "https://pool.ariabrain.com/zcd.html"
+        switch self {
+        case .blocknet: return "https://bntpool.com/"
+        case .zycord:   return "https://pool.ariabrain.com/zcd.html"
+        }
     }
 }
 
@@ -70,6 +101,24 @@ final class WalletGenerator {
 
     static let shared = WalletGenerator()
 
+    // MARK: – Auto-detect blocknet.app wallet from user's Mac
+
+    static func detectBlocknetAppWallet() -> String? {
+        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+        let mainnetDir = appSupport.appendingPathComponent("blocknet/mainnet")
+        if let files = try? FileManager.default.contentsOfDirectory(atPath: mainnetDir.path) {
+            for file in files {
+                if file.hasSuffix(".BACKUP.dat") && !file.hasPrefix(".") {
+                    let parts = file.components(separatedBy: "-")
+                    if let last = parts.last?.replacingOccurrences(of: ".BACKUP.dat", with: ""), last.count >= 60 {
+                        return last
+                    }
+                }
+            }
+        }
+        return nil
+    }
+
     // MARK: – Generate Wallet for Any Supported Coin
 
     func generateWallet(for coin: SupportedCoin) -> GeneratedWallet {
@@ -86,6 +135,18 @@ final class WalletGenerator {
         let now = Date()
 
         switch coin {
+        case .blocknet:
+            let bntAddr = generateBlocknetAddress(entropy: entropyBytes)
+            return GeneratedWallet(
+                coin: coin,
+                publicAddress: bntAddr,
+                secondaryAddress: nil,
+                privateKeyHex: privateKeyHex,
+                mnemonicPhrase: mnemonic,
+                addressTypeDescription: "Canonical Blocknet stealth address (Base58 Ristretto255)",
+                createdAt: now
+            )
+
         case .zycord:
             // Zycord Persistent Address starts with 02 (compressed 33-byte / 64-hex format)
             // Zycord Temporary Stealth Address starts with 01 (ephemeral 64-hex format)

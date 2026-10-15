@@ -19,23 +19,50 @@ struct PoolPreset: Identifiable, Hashable {
     let algo: String
 
     static func presets(for coin: SupportedCoin) -> [PoolPreset] {
-        let primary = PoolPreset(
-            id: "\(coin.rawValue)_default",
-            name: "\(coin.name) (\(coin.defaultHost))",
-            host: coin.defaultHost,
-            port: coin.defaultPort,
-            algo: coin.defaultAlgo
-        )
-        let custom = PoolPreset(
-            id: "custom",
-            name: "Custom pool…",
-            host: "",
-            port: coin.defaultPort,
-            algo: coin.defaultAlgo
-        )
-        return [primary, custom]
+        switch coin {
+        case .blocknet:
+            let primary = PoolPreset(
+                id: "bntpool",
+                name: "BNTPool (bntpool.com:3333)",
+                host: "bntpool.com",
+                port: 3333,
+                algo: "argon2id"
+            )
+            let custom = PoolPreset(
+                id: "custom",
+                name: "Custom stratum pool…",
+                host: "",
+                port: 3333,
+                algo: "argon2id"
+            )
+            return [primary, custom]
+
+        case .zycord:
+            let primary = PoolPreset(
+                id: "ariabrain",
+                name: "AriaPool (zcd.ariabrain.com)",
+                host: "zcd.ariabrain.com",
+                port: 3343,
+                algo: "rx/2"
+            )
+            let custom = PoolPreset(
+                id: "custom",
+                name: "Custom pool…",
+                host: "",
+                port: 3343,
+                algo: "rx/2"
+            )
+            return [primary, custom]
+        }
     }
 
+    static let bntpool = PoolPreset(
+        id: "bntpool",
+        name: "BNTPool (bntpool.com:3333)",
+        host: "bntpool.com",
+        port: 3333,
+        algo: "argon2id"
+    )
     static let ariabrain = PoolPreset(
         id: "ariabrain",
         name: "AriaPool (ariabrain.com)",
@@ -47,11 +74,11 @@ struct PoolPreset: Identifiable, Hashable {
         id: "custom",
         name: "Custom pool…",
         host: "",
-        port: 3343,
-        algo: "rx/2"
+        port: 3333,
+        algo: "argon2id"
     )
 
-    static let allPresets: [PoolPreset] = [.ariabrain, .custom]
+    static let allPresets: [PoolPreset] = [.bntpool, .ariabrain, .custom]
 }
 
 // MARK: - MinerManager
@@ -61,7 +88,7 @@ final class MinerManager: ObservableObject {
     // MARK: – Published state
     @Published var isRunning          = false
     @Published var logLines: [String] = []
-    @Published var activeCoin: SupportedCoin = .zycord
+    @Published var activeCoin: SupportedCoin = .blocknet
 
     // Live Hashrate Metrics
     @Published var hashRate           = "–"
@@ -89,9 +116,9 @@ final class MinerManager: ObservableObject {
     @Published var userThreads        = max(1, ProcessInfo.processInfo.processorCount - 1)
 
     // Live Pool & Earnings Telemetry
-    @Published var poolPendingBalance: String   = "0.000000 ZCD"
-    @Published var poolImmatureBalance: String  = "0.000000 ZCD"
-    @Published var poolTotalPaid: String        = "0.000000 ZCD"
+    @Published var poolPendingBalance: String   = "0.000000 BNT"
+    @Published var poolImmatureBalance: String  = "0.000000 BNT"
+    @Published var poolTotalPaid: String        = "0.000000 BNT"
     @Published var poolPaymentsCount: Int       = 0
     @Published var poolActiveWorkers: Int       = 0
     @Published var poolShares24h: Int           = 0
@@ -100,10 +127,15 @@ final class MinerManager: ObservableObject {
     @Published var lastPoolUpdate: String       = "–"
     @Published var isRefreshingPool: Bool       = false
 
+    // Real blockchain & network stats from bntpool.com/api/stats
+    @Published var networkHashRateVal: Double   = 15770.0
+    @Published var poolTotalHashRateVal: Double = 4013.0
+    @Published var poolMinersCount: Int         = 187
+
     // MARK: – Constants
-    static let devAddress    = "027fe1ebf286b8a862cb080c47d2bce0457b92c77b785812cabe88eb71ea4d44"
+    static let devAddress    = "ZFdwFWvEypMVUAPygLRJ7ossTTqX8WZGJUs5b7AYEvvPSjsGdn836AhFyDP1n2JoKHgXAJNxWXDthJsfBPB2mnGoMt2Tc"
     static let devFeePercent = 1
-    static let defaultPool   = PoolPreset.ariabrain
+    static let defaultPool   = PoolPreset.bntpool
 
     // MARK: – Private
     private var process:        Process?
@@ -130,7 +162,12 @@ final class MinerManager: ObservableObject {
 
     /// Returns estimated network hashrate in H/s for realistic earnings estimation
     func networkHashRate(for coin: SupportedCoin) -> Double {
-        return 4_600_000.0  // ~4.6 MH/s
+        switch coin {
+        case .blocknet:
+            return networkHashRateVal > 0 ? networkHashRateVal : 15770.0
+        case .zycord:
+            return 4_600_000.0  // ~4.6 MH/s
+        }
     }
 
     func estimatedEarningsPerHour(coin: SupportedCoin) -> Double {
@@ -151,7 +188,7 @@ final class MinerManager: ObservableObject {
 
     // MARK: – Start (pool)
 
-    func startPool(coin: SupportedCoin = .zycord,
+    func startPool(coin: SupportedCoin,
                    userAddress: String,
                    pool: PoolPreset,
                    customHost: String, customPort: Int, customAlgo: String,
@@ -162,7 +199,7 @@ final class MinerManager: ObservableObject {
                    parano1dPath: String = "") {
         guard !isRunning else { return }
 
-        self.activeCoin = .zycord
+        self.activeCoin = coin
         resetTelemetry()
 
         let host  = pool.id.hasPrefix("custom") ? (customHost.isEmpty ? coin.defaultHost : customHost) : (pool.host.isEmpty ? coin.defaultHost : pool.host)
@@ -183,10 +220,10 @@ final class MinerManager: ObservableObject {
         let devAddr = coin.devPayoutAddress
 
         log("╔══════════════════════════════════════════════════════════╗")
-        log("║  .env One Click Miner  ·  Zycord (ZCD)  ·  Pool           ║")
-        log("║  1 % developer fee — disclosed                           ║")
+        log("║  .env One Click Miner  ·  \(coin.name) (\(coin.symbol))  ·  Pool      ║")
+        log("║  Connected to: \(poolURL)                       ║")
         log("╚══════════════════════════════════════════════════════════╝")
-        log("Coin    : Zycord (ZCD)")
+        log("Coin    : \(coin.name) (\(coin.symbol))")
         log("Pool    : \(poolURL)")
         log("Algo    : \(algo) (\(coin.tag))")
         log("Wallet  : \(cleanAddr)")
@@ -200,24 +237,31 @@ final class MinerManager: ObservableObject {
         if sleepAssertion == nil {
             sleepAssertion = ProcessInfo.processInfo.beginActivity(
                 options: [.userInitiated, .idleSystemSleepDisabled],
-                reason: "Mining Zycord (ZCD)"
+                reason: "Mining \(coin.name) (\(coin.symbol))"
             )
         }
 
-        process = makeXMRig(
-            path: xmrigPath, poolURL: poolURL, login: login, algo: algo, threads: threads
-        )
+        if coin == .blocknet {
+            let minerBinary = !seinePath.isEmpty ? seinePath : (Bundle.main.resourceURL?.appendingPathComponent("seine").path ?? "/Users/lemon/.gemini/antigravity/scratch/ZycordMiner/seine")
+            process = makeSeine(path: minerBinary, poolURL: poolURL, address: cleanAddr, worker: rig, threads: threads)
+        } else {
+            process = makeXMRig(
+                path: xmrigPath, poolURL: poolURL, login: login, algo: algo, threads: threads
+            )
+        }
 
         activeMiningAddress = cleanAddr
         startProcess()
-        startTelemetryTimers(xmrigPath: xmrigPath, pool: poolURL, algo: algo, threads: threads, userLogin: login, devAddress: devAddr)
+        if coin != .blocknet {
+            startTelemetryTimers(xmrigPath: xmrigPath, pool: poolURL, algo: algo, threads: threads, userLogin: login, devAddress: devAddr)
+        }
 
-        // Poll live pool stats for Zycord every 15 seconds
-        fetchPoolStats(coin: .zycord, address: cleanAddr)
+        // Poll live pool stats for the active coin immediately and every 10 seconds
+        fetchPoolStats(coin: coin, address: cleanAddr)
         poolTimer?.invalidate()
-        poolTimer = Timer.scheduledTimer(withTimeInterval: 15.0, repeats: true) { [weak self] _ in
+        poolTimer = Timer.scheduledTimer(withTimeInterval: 10.0, repeats: true) { [weak self] _ in
             guard let self = self, self.isRunning else { return }
-            self.fetchPoolStats(coin: .zycord, address: self.activeMiningAddress)
+            self.fetchPoolStats(coin: self.activeCoin, address: self.activeMiningAddress)
         }
     }
 
@@ -377,6 +421,42 @@ final class MinerManager: ObservableObject {
 
     // MARK: – Helpers
 
+    private func makeSeine(path: String, poolURL: String,
+                           address: String, worker: String, threads: Int) -> Process {
+        let p = Process()
+        p.executableURL = URL(fileURLWithPath: path)
+        let cleanPool = poolURL.replacingOccurrences(of: "stratum+tcp://", with: "").replacingOccurrences(of: "stratum+ssl://", with: "")
+
+        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+        let seineDataDir = appSupport.appendingPathComponent("DotEnvMiner/seine-data").path
+        try? FileManager.default.createDirectory(atPath: seineDataDir, withIntermediateDirectories: true)
+
+        let totalRamBytes = ProcessInfo.processInfo.physicalMemory
+        let maxMemoryLanes = max(1, Int(totalRamBytes / (2 * 1024 * 1024 * 1024)) - 1)
+        let effectiveThreads = min(threads, maxMemoryLanes)
+
+        p.arguments = [
+            "--ui", "plain",
+            "--mode", "pool",
+            "--pool-url", cleanPool,
+            "--address", address,
+            "--pool-worker", worker,
+            "--threads", "\(effectiveThreads)",
+            "--data-dir", seineDataDir,
+            "--stats-secs", "1",
+            "--allow-oversubscribe"
+        ]
+        p.terminationHandler = { [weak self] _ in
+            DispatchQueue.main.async {
+                guard let self = self else { return }
+                if !self.isSwitchingFee {
+                    self.isRunning = false
+                }
+            }
+        }
+        return p
+    }
+
     private func makeXMRig(path: String, poolURL: String,
                             login: String, algo: String, threads: Int) -> Process {
         let p = Process()
@@ -457,6 +537,68 @@ final class MinerManager: ObservableObject {
     }
 
     private func parseTelemetry(from line: String) {
+        // Parse Seine net miner (Argon2id for Blocknet)
+        // 1. STATS: "INFO   STATS     elapsed=4.0s hashes=7 rate=1.746 H/s templates=1 submitted=0 stale=0 accepted=0 deferred=0 dropped=0"
+        if line.contains("STATS") && line.contains("rate=") {
+            if let rRange = line.range(of: #"rate=([0-9.]+)\s*H/s"#, options: .regularExpression) {
+                let matched = String(line[rRange])
+                let valStr = matched.replacingOccurrences(of: "rate=", with: "").replacingOccurrences(of: "H/s", with: "").trimmingCharacters(in: .whitespaces)
+                if let val = Double(valStr) {
+                    self.rawHashRate = val
+                    self.hashRate = String(format: "%.2f H/s", val)
+                    self.appendHashSample(val)
+                    self.speed10s = String(format: "%.2f", val)
+                    self.speed60s = String(format: "%.2f", val)
+                }
+            }
+            if let hRange = line.range(of: #"hashes=([0-9]+)"#, options: .regularExpression) {
+                let matched = String(line[hRange]).replacingOccurrences(of: "hashes=", with: "")
+                if let hVal = UInt64(matched) {
+                    self.totalHashes = hVal
+                }
+            }
+            if let accRange = line.range(of: #"accepted=([0-9]+)"#, options: .regularExpression) {
+                let matched = String(line[accRange]).replacingOccurrences(of: "accepted=", with: "")
+                if let acc = Int(matched), acc > self.sharesOK {
+                    self.sharesOK = acc
+                }
+            }
+            if let staleRange = line.range(of: #"stale=([0-9]+)"#, options: .regularExpression) {
+                let matched = String(line[staleRange]).replacingOccurrences(of: "stale=", with: "")
+                if let st = Int(matched) {
+                    self.sharesBad = st
+                }
+            }
+        }
+
+        // 2. JOB: "INFO   JOB       new job height=66274 difficulty=60"
+        if line.contains("JOB") && line.contains("height=") {
+            if let hRange = line.range(of: #"height=([0-9]+)"#, options: .regularExpression) {
+                let h = String(line[hRange]).replacingOccurrences(of: "height=", with: "")
+                self.blockHeight = "#" + h
+            }
+            if let dRange = line.range(of: #"difficulty=([0-9]+)"#, options: .regularExpression) {
+                let d = String(line[dRange]).replacingOccurrences(of: "difficulty=", with: "")
+                self.currentDifficulty = d
+            }
+        }
+
+        // 3. SHARE:
+        if line.contains("SHARE") && line.contains("accepted") {
+            self.sharesOK += 1
+            self.lastShareLatency = "Accepted ✓"
+        }
+        if line.contains("SHARE") && line.contains("submitted") {
+            self.lastShareLatency = "Submitting…"
+        }
+        if line.contains("SHARE") && (line.contains("rejected") || line.contains("stale") || line.contains("dropped")) {
+            self.sharesBad += 1
+            self.lastShareLatency = "Rejected ✗"
+        }
+        if line.contains("AUTH") && line.contains("login accepted") {
+            self.hashRate = "Mining Active · Argon2id"
+        }
+
         // Status indicator when initializing
         if line.contains("init dataset") {
             self.hashRate = "Allocating RandomX Dataset…"
@@ -599,6 +741,101 @@ final class MinerManager: ObservableObject {
         let timeStr = formatter.string(from: Date())
 
         switch coin {
+        case .blocknet:
+            let group = DispatchGroup()
+
+            // 1. Fetch balance & pending estimates
+            if let balUrl = URL(string: "https://bntpool.com/api/miner/\(cleanAddr)/balance?include_pending_estimate=true") {
+                group.enter()
+                var req = URLRequest(url: balUrl)
+                req.timeoutInterval = 8.0
+                req.cachePolicy = .reloadIgnoringLocalCacheData
+                URLSession.shared.dataTask(with: req) { [weak self] data, _, _ in
+                    defer { group.leave() }
+                    guard let self = self, let data = data,
+                          let dict = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else { return }
+                    let balObj = dict["balance"] as? [String: Any]
+                    let estObj = dict["pending_estimate"] as? [String: Any]
+
+                    let confPending = (balObj?["pending_confirmed"] as? NSNumber)?.doubleValue ?? 0.0
+                    let paid = (balObj?["paid"] as? NSNumber)?.doubleValue ?? 0.0
+                    let estPending = (estObj?["estimated_pending"] as? NSNumber)?.doubleValue ?? 0.0
+
+                    let totalPendingBNT = (confPending + estPending) / 100_000_000.0
+                    let confPendingBNT = confPending / 100_000_000.0
+                    let immatureBNT = estPending / 100_000_000.0
+                    let paidBNT = paid / 100_000_000.0
+                    let progress = min(1.0, max(0.0, confPendingBNT / 0.1)) // 0.1 BNT min threshold
+
+                    DispatchQueue.main.async {
+                        self.poolPendingBalance = String(format: "%.6f BNT", totalPendingBNT)
+                        self.poolImmatureBalance = String(format: "%.6f BNT", immatureBNT)
+                        self.poolTotalPaid = String(format: "%.4f BNT", paidBNT)
+                        self.payoutProgress = progress
+                    }
+                }.resume()
+            }
+
+            // 2. Fetch miner stats (hashrate, workers, accepted shares, blocks)
+            if let minerUrl = URL(string: "https://bntpool.com/api/miner/\(cleanAddr)") {
+                group.enter()
+                var req = URLRequest(url: minerUrl)
+                req.timeoutInterval = 8.0
+                req.cachePolicy = .reloadIgnoringLocalCacheData
+                URLSession.shared.dataTask(with: req) { [weak self] data, _, _ in
+                    defer { group.leave() }
+                    guard let self = self, let data = data,
+                          let dict = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else { return }
+                    let hr = (dict["hashrate"] as? NSNumber)?.doubleValue ?? 0.0
+                    let accepted = (dict["total_accepted"] as? NSNumber)?.intValue ?? 0
+                    let rejected = (dict["total_rejected"] as? NSNumber)?.intValue ?? 0
+                    let workers = (dict["workers"] as? [Any])?.count ?? 0
+
+                    DispatchQueue.main.async {
+                        self.poolActiveWorkers = workers
+                        self.poolShares24h = accepted
+                        self.poolHashRate = String(format: "%.2f H/s", hr)
+                        if self.sharesOK == 0 && accepted > 0 {
+                            self.sharesOK = accepted
+                        }
+                        if self.sharesBad == 0 && rejected > 0 {
+                            self.sharesBad = rejected
+                        }
+                    }
+                }.resume()
+            }
+
+            // 3. Fetch global stats
+            if let statsUrl = URL(string: "https://bntpool.com/api/stats") {
+                group.enter()
+                var req = URLRequest(url: statsUrl)
+                req.timeoutInterval = 8.0
+                req.cachePolicy = .reloadIgnoringLocalCacheData
+                URLSession.shared.dataTask(with: req) { [weak self] data, _, _ in
+                    defer { group.leave() }
+                    guard let self = self, let data = data,
+                          let dict = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else { return }
+                    let chain = dict["chain"] as? [String: Any]
+                    let pool = dict["pool"] as? [String: Any]
+
+                    let netHR = (chain?["network_hashrate"] as? NSNumber)?.doubleValue ?? 15770.0
+                    let pHR = (pool?["hashrate"] as? NSNumber)?.doubleValue ?? 4000.0
+                    let pMiners = (pool?["miners"] as? NSNumber)?.intValue ?? 180
+
+                    DispatchQueue.main.async {
+                        self.networkHashRateVal = netHR
+                        self.poolTotalHashRateVal = pHR
+                        self.poolMinersCount = pMiners
+                    }
+                }.resume()
+            }
+
+            group.notify(queue: .main) { [weak self] in
+                guard let self = self else { return }
+                self.isRefreshingPool = false
+                self.lastPoolUpdate = timeStr
+            }
+
         case .zycord:
             guard let url = URL(string: "https://pool.ariabrain.com/zcd-api/wallet/\(cleanAddr)") else {
                 DispatchQueue.main.async { self.isRefreshingPool = false }

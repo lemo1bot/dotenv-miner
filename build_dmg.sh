@@ -8,7 +8,7 @@
 
 set -euo pipefail
 
-APP_NAME=".env One Click Miner"
+APP_NAME=".env"
 BUNDLE_NAME="DotEnv"
 VERSION="1.0.0"
 PROJECT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -18,13 +18,12 @@ DEV_ADDRESS="0x027fe1ebf286b8a862cb080c47d2bce0457b92c77b785812cabe88eb71ea4d44"
 
 echo ""
 echo "╔══════════════════════════════════════════════════════════╗"
-echo "║  .env One Click Miner DMG Builder                        ║"
-echo "║  1 % developer fee — transparent                         ║"
+echo "║  .env Blocknet Miner DMG Builder                         ║"
+echo "║  Real-time BNTpool.com telemetry & native Argon2id       ║"
 echo "╚══════════════════════════════════════════════════════════╝"
 echo ""
 echo "  App name  : $APP_NAME"
 echo "  Version   : $VERSION"
-echo "  Dev addr  : $DEV_ADDRESS"
 echo ""
 
 mkdir -p "$BUILD_DIR" "$DMG_DIR" "$PROJECT_DIR/.cache/clang"
@@ -44,24 +43,29 @@ swiftc -O -parse-as-library \
 echo "→ Assembling $BUNDLE_NAME.app bundle…"
 APP_BUNDLE="$BUILD_DIR/$BUNDLE_NAME.app"
 rm -rf "$APP_BUNDLE"
-mkdir -p "$APP_BUNDLE/Contents/MacOS" "$APP_BUNDLE/Contents/Resources"
+mkdir -p "$APP_BUNDLE/Contents/MacOS" "$APP_BUNDLE/Contents/Resources/en.lproj"
 
 cp "$BUILD_DIR/$BUNDLE_NAME" "$APP_BUNDLE/Contents/MacOS/$BUNDLE_NAME"
 chmod +x "$APP_BUNDLE/Contents/MacOS/$BUNDLE_NAME"
 
-for bin in xmrig; do
-    if [[ -f "$PROJECT_DIR/$bin" ]]; then
-        cp "$PROJECT_DIR/$bin" "$APP_BUNDLE/Contents/MacOS/$bin"
-        chmod +x "$APP_BUNDLE/Contents/MacOS/$bin"
-        ln -sf "../MacOS/$bin" "$APP_BUNDLE/Contents/Resources/$bin"
-        codesign -s - --force "$APP_BUNDLE/Contents/MacOS/$bin"
+for bin in seine xmrig; do
+    if [[ -f "$PROJECT_DIR/${bin}" ]]; then
+        echo "  -> Bundling ${bin}..."
+        cp "$PROJECT_DIR/${bin}" "$APP_BUNDLE/Contents/MacOS/${bin}"
+        chmod +x "$APP_BUNDLE/Contents/MacOS/${bin}"
+        ln -sf "../MacOS/${bin}" "$APP_BUNDLE/Contents/Resources/${bin}"
+        codesign -s - --force "$APP_BUNDLE/Contents/MacOS/${bin}"
     fi
 done
-
 
 cp "$PROJECT_DIR/AppIcon.icns" "$APP_BUNDLE/Contents/Resources/AppIcon.icns"
 cp "$PROJECT_DIR/ZycordMiner/ZycordMiner/Assets.xcassets/Logo.imageset/logo.png" "$APP_BUNDLE/Contents/Resources/Logo.png"
 echo -n "APPL????" > "$APP_BUNDLE/Contents/PkgInfo"
+
+cat << EOF > "$APP_BUNDLE/Contents/Resources/en.lproj/InfoPlist.strings"
+CFBundleDisplayName = "$APP_NAME";
+CFBundleName = "$APP_NAME";
+EOF
 
 cat << EOF > "$APP_BUNDLE/Contents/Info.plist"
 <?xml version="1.0" encoding="UTF-8"?>
@@ -94,7 +98,7 @@ cat << EOF > "$APP_BUNDLE/Contents/Info.plist"
 </plist>
 EOF
 
-echo "→ Ad-hoc code signing…"
+echo "→ Ad-hoc code signing app bundle…"
 codesign -s - --force --deep "$APP_BUNDLE"
 
 echo "→ Staging for DMG…"
@@ -104,23 +108,28 @@ mkdir -p "$DMG_STAGING"
 cp -R "$APP_BUNDLE" "$DMG_STAGING/"
 ln -s /Applications "$DMG_STAGING/Applications"
 
-DMG_OUT="$DMG_DIR/DotEnv-${VERSION}.dmg"
+DMG_OUT="$DMG_DIR/.env-${VERSION}.dmg"
 rm -f "$DMG_OUT"
 
 echo "→ Creating DMG image…"
 hdiutil create \
-  -volname "DotEnv One Click Miner" \
+  -volname ".env Miner" \
   -srcfolder "$DMG_STAGING" \
   -ov \
   -format UDZO \
   "$DMG_OUT"
 
+cp "$DMG_OUT" "$PROJECT_DIR/.env-${VERSION}.dmg"
 cp "$DMG_OUT" "$PROJECT_DIR/DotEnv-${VERSION}.dmg"
+if [[ -d "$HOME/Desktop" ]]; then
+  cp "$DMG_OUT" "$HOME/Desktop/.env-${VERSION}.dmg"
+  echo "→ Copied DMG to Desktop: $HOME/Desktop/.env-${VERSION}.dmg"
+fi
 
 echo ""
 echo "╔══════════════════════════════════════════╗"
 echo "║  Build Complete!                         ║"
-printf "║  DMG: %-35s║\n" "$DMG_OUT"
-printf "║  Root: %-34s║\n" "$PROJECT_DIR/DotEnv-${VERSION}.dmg"
+echo "║  DMG: $DMG_OUT"
+echo "║  Desktop: $HOME/Desktop/.env-${VERSION}.dmg"
 echo "╚══════════════════════════════════════════╝"
 echo ""

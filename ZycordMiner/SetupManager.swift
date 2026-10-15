@@ -13,8 +13,7 @@ final class SetupManager: ObservableObject {
 
     var isReady: Bool {
         if case .ready = state { return true }
-        // Instantly ready whenever xmrig binary exists!
-        return FileManager.default.isExecutableFile(atPath: xmrigPath)
+        return FileManager.default.isExecutableFile(atPath: seinePath) || FileManager.default.isExecutableFile(atPath: xmrigPath)
     }
 
     var isBuilding: Bool {
@@ -41,13 +40,13 @@ final class SetupManager: ObservableObject {
     var detail: String {
         switch state {
         case .ready:
-            return "Engine ready · RandomX v2 (rx/2)"
+            return "Engine ready · Seine v0.2.15 (Argon2id for BNT) & XMRig (rx/2)"
         case .building:
             return "Solo node building in background. Pool mining is already available."
         case .failed(let e):
             return e
         default:
-            return "Engine ready · RandomX v2 (rx/2)"
+            return "Engine ready · Seine v0.2.15 (Argon2id for BNT)"
         }
     }
 
@@ -69,11 +68,22 @@ final class SetupManager: ObservableObject {
 
     // MARK: – Paths
 
+    var seinePath: String {
+        let candidates = [
+            Bundle.main.executableURL?.deletingLastPathComponent().appendingPathComponent("seine").path ?? "",
+            Bundle.main.resourceURL?.appendingPathComponent("seine").path ?? "",
+            support.appendingPathComponent("bin/seine").path,
+            "/Users/lemon/.gemini/antigravity/scratch/ZycordMiner/seine"
+        ]
+        return candidates.first { FileManager.default.isExecutableFile(atPath: $0) } ?? ""
+    }
+
     var xmrigPath: String {
         let candidates = [
             Bundle.main.executableURL?.deletingLastPathComponent().appendingPathComponent("xmrig").path ?? "",
             Bundle.main.resourceURL?.appendingPathComponent("xmrig").path ?? "",
-            support.appendingPathComponent("bin/xmrig").path
+            support.appendingPathComponent("bin/xmrig").path,
+            "/Users/lemon/.gemini/antigravity/scratch/ZycordMiner/xmrig"
         ]
         return candidates.first { FileManager.default.isExecutableFile(atPath: $0) } ?? ""
     }
@@ -97,20 +107,19 @@ final class SetupManager: ObservableObject {
     // MARK: – Public
 
     func checkAndBuild() {
-        // Fast-path: if xmrig is bundled inside the app, we are READY instantly!
-        if FileManager.default.isExecutableFile(atPath: xmrigPath) {
+        // Fast-path: if seine or xmrig is bundled inside the app, we are READY instantly!
+        if FileManager.default.isExecutableFile(atPath: seinePath) || FileManager.default.isExecutableFile(atPath: xmrigPath) {
             state = .ready
             return
         }
 
         // Check if copied to support directory
-        let dest = support.appendingPathComponent("bin/xmrig").path
+        let dest = support.appendingPathComponent("bin/seine").path
         if FileManager.default.isExecutableFile(atPath: dest) {
             state = .ready
             return
         }
 
-        // Fallback: copy bundled resource or download if missing
         state = .ready
     }
 
