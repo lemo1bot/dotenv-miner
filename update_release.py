@@ -59,11 +59,11 @@ def main():
     }
 
     # 2. Update release title and description
-    print("→ Updating release title to '.env — Blocknet (BNT) & Multi-Coin macOS Miner v1.0.0'…")
+    print("→ Updating release title to '.env — Blocknet (BNT) macOS Miner v1.0.0'…")
     patch_url = f"https://api.github.com/repos/{owner}/{repo}/releases/{release_id}"
     patch_data = json.dumps({
-        "name": ".env — Blocknet (BNT) & Multi-Coin macOS Miner v1.0.0",
-        "body": "Official macOS Release for **.env** Miner.\n\n### ⚡ Blocknet (BNT) & bntpool.com Features:\n- **Native ARM64 Argon2id Engine (`seine` v0.2.15)**: High performance mining directly on Apple Silicon.\n- **Real-time Live Telemetry**: Actual hardware hashrate graph and live share submission status directly from engine stdout.\n- **Live bntpool.com Integration**: Real-time balance polling (`/api/miner/<address>/balance?include_pending_estimate=true`), immature balance, confirmed balance, total paid, and payout progress bar towards 0.10 BNT.\n- **Blocknet.app Integration**: Auto-detects wallet address from `/Applications/blocknet.app` wallet data in `~/Library/Application Support/blocknet/mainnet/`.\n\n### ⚡ Other Supported Coins:\n- **Zycord (ZCD)**: RandomX v2 (`rx/2`) via bundled native ARM64 XMRig\n- **ConnectCoin (XCC)**: Pay-to-Connect (`rx/0`) via native Stratum Bridge\n- **Common Foundry (CMFD)**: ForgeMatrix AI PoW\n- **TrueNorth (TNC)**: Bitcoin + RandomX (`rx/0`)\n- **Privacy Bank Chain (PBC)**: Post-Quantum Privacy (`rx/pbc`)\n- **Parano1d (NOID)**: Proof-Native L1 (`Poseidon2b`)\n\n### 📦 Installation:\n1. Download `DotEnv-1.0.0.dmg` or `env-1.0.0.dmg` below.\n2. Open the DMG and drag **`.env`** (`DotEnv.app`) to your Applications folder."
+        "name": ".env — Blocknet (BNT) macOS Miner v1.0.0",
+        "body": "Official macOS Release for **.env** — Blocknet (BNT) Miner.\n\n### ⚡ Blocknet (BNT) & bntpool.com Features:\n- **Native ARM64 Argon2id Engine (`seine` v0.2.15)**: High performance native Apple Silicon Argon2id PoW mining.\n- **Real-time Live Telemetry**: Live hardware hashrate graph, real hashes, and live share submission status streaming directly from engine stdout.\n- **Live bntpool.com Integration**: Real-time balance polling (`/api/miner/<address>/balance?include_pending_estimate=true`), immature balance, confirmed balance, total paid, and payout progress bar towards 0.10 BNT threshold.\n- **Blocknet.app Wallet Detection**: Automatically detects wallet backup from `/Applications/blocknet.app` in `~/Library/Application Support/blocknet/mainnet/`.\n- **Transparent 1% Developer Fee**: 36 seconds per hour (1%) mining to developer address, 99% to user. Bypassed if you are the developer.\n\n### 📦 Installation:\n1. Download `DotEnv-1.0.0.dmg` below.\n2. Open the DMG and drag **`.env`** (`DotEnv.app`) to your Applications folder.\n3. Launch `.env` and start mining to `bntpool.com:3333`!"
     }).encode("utf-8")
     patch_req = urllib.request.Request(
         patch_url,
@@ -97,7 +97,7 @@ def main():
     with open(dmg_path, "rb") as f:
         file_bytes = f.read()
 
-    for asset_name in ["DotEnv-1.0.0.dmg", "env-1.0.0.dmg"]:
+    for asset_name in ["DotEnv-1.0.0.dmg"]:
         print(f"→ Uploading new {asset_name} ({dmg_size_mb:.2f} MB)…")
         upload_url = f"{upload_base}?name={asset_name}"
         upload_req = urllib.request.Request(
